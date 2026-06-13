@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "node tool/build.mjs",
-    "test": "node tool/test_transform.mjs",
+    "test": "node tool/test_transform.mjs && node tool/test_components.mjs",
     "assets": "node tool/render_assets.mjs",
     "check": "npm run test && npm run build"
   },

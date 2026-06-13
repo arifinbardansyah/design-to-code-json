@@ -11,6 +11,11 @@ system assumptions; useful for any codegen, token pipeline, or LLM workflow.
 {
   "schemaVersion": "1.0",
 
+  // 0) Only with "Dedupe components" on: repeated subtrees extracted into
+  //    reusable definitions; fields that differ across uses become props.
+  //    { "ListItem": { "props": ["title_text"], "node": { ..."{{title_text}}"... } } }
+  "components": { /* ... */ },
+
   // 1) The selected tree. Colours and text styles are emitted as *references*
   //    (names) that resolve into the catalogs below; raw values appear only
   //    when a property isn't bound to a variable/style. e.g.
@@ -57,10 +62,28 @@ spacing collapses to a bare number (or `{value, variable}` when bound), and
 
 ### Options (in the plugin panel)
 
+- **Dedupe components** (default off) — extract repeated subtrees into a
+  `components` library and rewrite each usage to `{ use, props }` (see below).
 - **Expand instances** (default off) — atoms vs full internals.
 - **Drop ids** (default on) — omit node ids and variable-id hashes; keep names.
 - **Modes** (default Light + Dark) — limit the variable/token dump to
   `Light + Dark`, `Default only`, or `All` modes.
+
+### Deduplicate components
+
+A pure post-process over the serialized tree. Two container subtrees are "the
+same component" when their **structure** matches (type, layout, text-style role,
+child shape, and which value-fields are present) regardless of concrete values.
+For each group of ≥2 occurrences:
+
+- a field that **differs** across occurrences becomes a **prop** (slot), named
+  from the tree path (`title_text`, `secondary_text_text`; deepened to
+  `parent_child_field` on collisions);
+- a field that's **identical** everywhere is baked into the template;
+- each usage is rewritten to `{ "use": "ListItem", "props": { ... } }`.
+
+If occurrences are identical, the component simply has no props. Components are
+extracted outermost-first (internals stay inside the template).
 
 ### Variables vs tokens
 

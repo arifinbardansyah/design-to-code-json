@@ -16,6 +16,7 @@ import {
   type RawVariable,
   type VarType,
 } from './transform';
+import { synthesizeComponents } from './components';
 
 // --- variable reading -------------------------------------------------------
 
@@ -151,8 +152,9 @@ interface Options {
   expandInstances: boolean;
   modes: ModeOption;
   dropIds: boolean;
+  dedupe: boolean;
 }
-let options: Options = { expandInstances: false, modes: 'lightDark', dropIds: true };
+let options: Options = { expandInstances: false, modes: 'lightDark', dropIds: true, dedupe: false };
 
 /** Per-run accumulators (kept off module scope so concurrent runs don't race). */
 interface Ctx {
@@ -491,8 +493,15 @@ async function run(forceCatalogRefresh = false): Promise<void> {
 
   const sel = figma.currentPage.selection;
   const ctx: Ctx = { vars: new Set(), textStyles: new Set() };
-  const nodes: unknown[] = [];
+  let nodes: unknown[] = [];
   for (const node of sel) nodes.push(await safeSerialize(node, 0, ctx));
+
+  let components: Record<string, unknown> | undefined;
+  if (options.dedupe) {
+    const synth = synthesizeComponents(nodes as any[]);
+    nodes = synth.nodes;
+    if (Object.keys(synth.components).length) components = synth.components;
+  }
 
   const catalog = await buildCatalog(ctx.vars);
   const textStyles = await buildTextStyles(ctx.textStyles);
@@ -500,6 +509,7 @@ async function run(forceCatalogRefresh = false): Promise<void> {
 
   const doc = prune({
     schemaVersion: '1.0',
+    components,
     nodes,
     textStyles,
     variables: buildFigmaShaped(catalog, options.modes),
