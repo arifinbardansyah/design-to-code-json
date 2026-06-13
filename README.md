@@ -29,26 +29,39 @@ system assumptions; useful for any codegen, token pipeline, or LLM workflow.
 
 See the plan/`tool/test_transform.mjs` for a worked example.
 
+The output is **compacted for codegen**: default/zero values are omitted,
+spacing collapses to a bare number (or `{value, variable}` when bound),
+single-style text is hoisted onto the node, and Figma ids are dropped.
+
 ### What each node carries
 
-- **Component identity** — instance `name`, `componentSet`, `variants`.
+- **Component identity** — `component` name + `variants`. Instances are emitted
+  as **atoms**: their internals aren't expanded; instead the captured `icon`
+  (or `components`) and `text` overrides are surfaced. Turn on **Expand
+  instances** to walk inside them.
 - **Layout** (auto-layout) — `mode` (row/column), `gap`, `padding`, axis
-  alignment, `sizing` (HUG/FILL/FIXED); each spacing value carries its bound
-  variable when set.
-- **Constraints** — pin/resize behaviour, min/max width-height.
-- **Style** — `fills`/`strokes` (solid → hex, gradients summarised), `strokeWeight`,
-  `cornerRadius` (uniform or per-corner), `effects` (shadows/blur), `opacity`.
-- **Colour** — every solid fill/stroke/text colour as hex **and** its
-  `boundVariable` (id + name) when bound.
-- **Text** — `characters` plus per-run `segments` (font, size, colour, bound
-  colour variable) via `getStyledTextSegments`, and the applied text style name.
+  alignment (only when non-default), `sizing` (HUG/FILL/FIXED); each spacing
+  value carries its bound `variable` when set.
+- **Style** — `fills`/`strokes` (`{color, variable?}`, gradients/images
+  summarised), `strokeWeight`, `cornerRadius`, `effects`, `opacity`.
+- **Text** — `characters`, `textStyle`, hoisted `font` (family/size/lineHeight,
+  plus weight & letterSpacing when non-default), `color` + `colorVariable`.
+  Genuinely mixed text keeps a per-run `segments` array.
+- **Constraints** — only when non-default (e.g. `SCALE` icons).
+
+### Options (in the plugin panel)
+
+- **Expand instances** (default off) — atoms vs full internals.
+- **Drop ids** (default on) — omit node ids and variable-id hashes; keep names.
+- **Modes** (default Light + Dark) — limit the variable/token dump to
+  `Light + Dark`, `Default only`, or `All` modes.
 
 ### Variables vs tokens
 
-Same data, two shapes. `variables` is the **lossless** Figma structure (keeps
-aliases and all modes verbatim). `tokens` is the **interoperable** DTCG view
-(imports into Style Dictionary / Tokens Studio); an aliasing token's `$value`
-is a `{reference}`, with the flattened literal under
+Same data, two shapes. `variables` mirrors Figma's structure keyed by mode
+**name**, aliases kept as `{type:"VARIABLE_ALIAS", name}`. `tokens` is the
+**interoperable** DTCG view (imports into Style Dictionary / Tokens Studio); an
+aliasing token's `$value` is a `{reference}`, with the flattened literal under
 `$extensions["com.figma"].resolved`.
 
 ## Build & verify

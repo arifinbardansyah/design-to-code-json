@@ -1,13 +1,18 @@
-// Figma plugin main thread. Walks the current selection into a structured
-// `nodes` tree (layout, style, colour, effects, text, component identity, and
-// inline bound-variable refs), then emits the file's full variable catalog in
-// two shapes: lossless `variables` (Figma-shaped) and `tokens` (W3C/DTCG).
-// Output is a single JSON document posted to the UI. No design-system coupling.
+// Figma plugin main thread. Walks the current selection into a compact,
+// codegen-friendly `nodes` tree and emits the file's variable catalog in two
+// shapes: `variables` (Figma-shaped, name-keyed) and `tokens` (W3C/DTCG).
+// Output is one JSON document posted to the UI. No design-system coupling.
+//
+// Compaction: default/zero values are omitted, single-style text is hoisted,
+// component instances are treated as atoms (component + variants + captured
+// icon/text overrides) unless "expand instances" is on, and Figma ids are
+// dropped. All toggled from the UI.
 
 import {
   rgbaToHex,
   buildFigmaShaped,
   buildTokens,
+  type ModeOption,
   type RawCatalog,
   type RawCollection,
   type RawValue,
@@ -143,16 +148,29 @@ async function buildCatalog(referenced: Set<string>): Promise<RawCatalog> {
   return { collections: [...maps.collections.values()], variables: [...maps.variables.values()] };
 }
 
-// --- bound-variable helpers (record id + resolve name) ---------------------
+// --- options ----------------------------------------------------------------
 
-async function boundRef(
-  alias: VariableAlias | undefined,
-  ref: Set<string>,
-): Promise<{ id: string; name: string | null } | undefined> {
+interface Options {
+  expandInstances: boolean;
+  modes: ModeOption;
+  dropIds: boolean;
+}
+let options: Options = { expandInstances: false, modes: 'lightDark', dropIds: true };
+
+/** Drop keys whose value is `undefined` (JSON already omits them, but this
+ *  keeps intermediate objects clean and lets callers test emptiness). */
+function prune<T extends Record<string, unknown>>(o: T): T {
+  for (const k of Object.keys(o)) if (o[k] === undefined) delete o[k];
+  return o;
+}
+
+// --- bound-variable helpers (record id for the catalog, return the name) ----
+
+async function boundVarName(alias: VariableAlias | undefined, ref: Set<string>): Promise<string | undefined> {
   if (!alias?.id) return undefined;
   ref.add(alias.id);
   const v = await getVar(alias.id);
-  return { id: alias.id, name: v?.name ?? null };
+  return v?.name ?? undefined;
 }
 
 function scalarBound(node: any, field: string): VariableAlias | undefined {
@@ -165,197 +183,242 @@ function paintBound(node: any, field: 'fills' | 'strokes', index: number): Varia
   return Array.isArray(arr) && isAlias(arr[index]) ? arr[index] : undefined;
 }
 
-// --- paint / effect serialisation ------------------------------------------
+/** A dimension: a bare number, `{value, variable}` when bound, or undefined
+ *  when zero and unbound. */
+async function dim(px: number, alias: VariableAlias | undefined, ref: Set<string>): Promise<unknown> {
+  const variable = await boundVarName(alias, ref);
+  if (variable) return { value: px, variable };
+  return px ? px : undefined;
+}
 
-async function serializePaints(node: any, field: 'fills' | 'strokes', ref: Set<string>): Promise<unknown[] | undefined> {
+// --- paint / effect / radius / layout / constraints -------------------------
+
+async function compactPaints(node: any, field: 'fills' | 'strokes', ref: Set<string>): Promise<unknown[] | undefined> {
   const paints = node[field];
-  if (!paints || paints === figma.mixed || !Array.isArray(paints) || paints.length === 0) return undefined;
+  if (!paints || paints === figma.mixed || !Array.isArray(paints) || !paints.length) return undefined;
   const out: unknown[] = [];
   for (let i = 0; i < paints.length; i++) {
     const p = paints[i];
     if (p.visible === false) continue;
     if (p.type === 'SOLID') {
-      out.push({
-        type: 'SOLID',
+      const variable = await boundVarName(paintBound(node, field, i), ref);
+      out.push(prune({
         color: rgbaToHex({ r: p.color.r, g: p.color.g, b: p.color.b, a: p.opacity ?? 1 }),
-        boundVariable: await boundRef(paintBound(node, field, i), ref),
-      });
+        variable,
+      }));
     } else if (p.type.startsWith('GRADIENT')) {
       out.push({
-        type: p.type,
-        stops: p.gradientStops?.map((s: any) => ({
-          position: s.position,
-          color: rgbaToHex(s.color),
-        })),
+        gradient: p.type,
+        stops: p.gradientStops?.map((s: any) => ({ position: s.position, color: rgbaToHex(s.color) })),
       });
     } else if (p.type === 'IMAGE') {
-      out.push({ type: 'IMAGE', scaleMode: p.scaleMode });
+      out.push({ image: p.scaleMode });
     }
   }
   return out.length ? out : undefined;
 }
 
-function serializeEffects(node: any): unknown[] | undefined {
+function compactEffects(node: any): unknown[] | undefined {
   const fx = node.effects;
-  if (!fx || !Array.isArray(fx) || fx.length === 0) return undefined;
+  if (!fx || !Array.isArray(fx) || !fx.length) return undefined;
   const out = fx
     .filter((e: any) => e.visible !== false)
     .map((e: any) => {
       if (e.type === 'DROP_SHADOW' || e.type === 'INNER_SHADOW') {
-        return {
+        return prune({
           type: e.type,
           color: rgbaToHex(e.color),
           offset: { x: e.offset.x, y: e.offset.y },
           radius: e.radius,
-          spread: e.spread ?? 0,
-        };
+          spread: e.spread || undefined,
+        });
       }
-      return { type: e.type, radius: e.radius }; // LAYER_BLUR / BACKGROUND_BLUR
+      return { type: e.type, radius: e.radius };
     });
   return out.length ? out : undefined;
 }
 
-async function serializeRadius(node: any, ref: Set<string>): Promise<unknown | undefined> {
+async function compactRadius(node: any, ref: Set<string>): Promise<unknown | undefined> {
   const r = node.cornerRadius;
-  if (typeof r === 'number') {
-    if (r === 0 && !node.boundVariables?.topLeftRadius) return undefined;
-    return { value: r, boundVariable: await boundRef(scalarBound(node, 'topLeftRadius'), ref) };
-  }
-  // mixed corners
-  const corners = ['topLeftRadius', 'topRightRadius', 'bottomRightRadius', 'bottomLeftRadius'];
+  if (typeof r === 'number') return dim(r, scalarBound(node, 'topLeftRadius'), ref);
+  const corners = ['topLeftRadius', 'topRightRadius', 'bottomRightRadius', 'bottomLeftRadius'] as const;
   if (corners.some((c) => node[c] > 0)) {
     const obj: Record<string, unknown> = {};
-    for (const c of corners) {
-      obj[c] = { value: node[c] ?? 0, boundVariable: await boundRef(scalarBound(node, c), ref) };
-    }
-    return obj;
+    for (const c of corners) obj[c] = await dim(node[c] ?? 0, scalarBound(node, c), ref);
+    return prune(obj);
   }
   return undefined;
 }
 
-async function serializeLayout(node: any, ref: Set<string>): Promise<unknown | undefined> {
+async function compactLayout(node: any, ref: Set<string>): Promise<unknown | undefined> {
   if (!('layoutMode' in node) || node.layoutMode === 'NONE') return undefined;
-  const padField = async (f: string) => ({ value: node[f] ?? 0, boundVariable: await boundRef(scalarBound(node, f), ref) });
-  return {
+  const padding = prune({
+    top: await dim(node.paddingTop ?? 0, scalarBound(node, 'paddingTop'), ref),
+    right: await dim(node.paddingRight ?? 0, scalarBound(node, 'paddingRight'), ref),
+    bottom: await dim(node.paddingBottom ?? 0, scalarBound(node, 'paddingBottom'), ref),
+    left: await dim(node.paddingLeft ?? 0, scalarBound(node, 'paddingLeft'), ref),
+  });
+  const bothHug = node.layoutSizingHorizontal === 'HUG' && node.layoutSizingVertical === 'HUG';
+  return prune({
     mode: node.layoutMode === 'HORIZONTAL' ? 'row' : 'column',
     wrap: node.layoutWrap === 'WRAP' ? true : undefined,
-    gap: { value: node.itemSpacing ?? 0, boundVariable: await boundRef(scalarBound(node, 'itemSpacing'), ref) },
-    padding: {
-      top: await padField('paddingTop'),
-      right: await padField('paddingRight'),
-      bottom: await padField('paddingBottom'),
-      left: await padField('paddingLeft'),
-    },
-    primaryAxisAlign: node.primaryAxisAlignItems,
-    counterAxisAlign: node.counterAxisAlignItems,
-    sizing: { horizontal: node.layoutSizingHorizontal, vertical: node.layoutSizingVertical },
-  };
+    gap: await dim(node.itemSpacing ?? 0, scalarBound(node, 'itemSpacing'), ref),
+    padding: Object.keys(padding).length ? padding : undefined,
+    primaryAxisAlign: node.primaryAxisAlignItems !== 'MIN' ? node.primaryAxisAlignItems : undefined,
+    counterAxisAlign: node.counterAxisAlignItems !== 'MIN' ? node.counterAxisAlignItems : undefined,
+    sizing: bothHug ? undefined : { horizontal: node.layoutSizingHorizontal, vertical: node.layoutSizingVertical },
+  });
 }
 
-function serializeConstraints(node: any): unknown | undefined {
+function compactConstraints(node: any): unknown | undefined {
   const c = node.constraints;
-  if (!c) return undefined;
-  const out: Record<string, unknown> = { horizontal: c.horizontal, vertical: c.vertical };
-  for (const k of ['minWidth', 'maxWidth', 'minHeight', 'maxHeight'] as const) {
-    if (node[k] != null) out[k] = node[k];
-  }
-  return out;
+  if (!c || (c.horizontal === 'MIN' && c.vertical === 'MIN')) return undefined;
+  return { horizontal: c.horizontal, vertical: c.vertical };
 }
 
 // --- text -------------------------------------------------------------------
 
-async function serializeText(node: TextNode, ref: Set<string>): Promise<unknown> {
+async function styleNameOf(id: unknown): Promise<string | undefined> {
+  if (typeof id !== 'string' || !id) return undefined;
+  try {
+    const s = await figma.getStyleByIdAsync(id);
+    return s?.name ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function compactText(node: TextNode, ref: Set<string>): Promise<Record<string, unknown>> {
   const fields = [
     'fontName', 'fontSize', 'fills', 'textStyleId',
     'textDecoration', 'letterSpacing', 'lineHeight', 'boundVariables',
   ] as const;
-  const segments: unknown[] = [];
-  for (const seg of node.getStyledTextSegments(fields as any)) {
-    const s = seg as any;
+  const segs = node.getStyledTextSegments(fields as any);
+
+  const segOut = async (s: any) => {
     const fillBound = s.boundVariables?.fills?.[0];
-    const fill = Array.isArray(s.fills) && s.fills[0]?.type === 'SOLID'
+    const color = Array.isArray(s.fills) && s.fills[0]?.type === 'SOLID'
       ? rgbaToHex({ r: s.fills[0].color.r, g: s.fills[0].color.g, b: s.fills[0].color.b, a: s.fills[0].opacity ?? 1 })
       : undefined;
-    segments.push({
+    const ls = typeof s.letterSpacing === 'object' ? s.letterSpacing.value : s.letterSpacing;
+    return prune({
       characters: s.characters,
-      fontFamily: s.fontName?.family,
-      fontStyle: s.fontName?.style,
-      fontSize: s.fontSize,
-      letterSpacing: typeof s.letterSpacing === 'object' ? s.letterSpacing.value : s.letterSpacing,
-      lineHeight: s.lineHeight?.unit === 'AUTO' ? 'AUTO' : s.lineHeight?.value,
-      color: fill,
-      colorVariable: await boundRef(isAlias(fillBound) ? fillBound : undefined, ref),
+      font: prune({
+        family: s.fontName?.family,
+        style: s.fontName?.style && s.fontName.style !== 'Regular' ? s.fontName.style : undefined,
+        size: s.fontSize,
+        lineHeight: s.lineHeight?.unit === 'AUTO' ? undefined : s.lineHeight?.value,
+        letterSpacing: ls ? ls : undefined,
+      }),
+      color,
+      colorVariable: await boundVarName(isAlias(fillBound) ? fillBound : undefined, ref),
     });
-  }
-  const styleName = await styleNameOf((node as any).textStyleId);
-  return {
-    characters: node.characters,
-    textAlign: { horizontal: (node as any).textAlignHorizontal, vertical: (node as any).textAlignVertical },
-    textStyle: styleName ? { name: styleName } : undefined,
-    segments,
   };
-}
 
-async function styleNameOf(id: unknown): Promise<string | null> {
-  if (typeof id !== 'string' || !id) return null;
-  try {
-    const s = await figma.getStyleByIdAsync(id);
-    return s?.name ?? null;
-  } catch {
-    return null;
+  const align = (node.textAlignHorizontal !== 'LEFT' || node.textAlignVertical !== 'TOP')
+    ? { horizontal: node.textAlignHorizontal, vertical: node.textAlignVertical }
+    : undefined;
+  const base: Record<string, unknown> = {
+    characters: node.characters,
+    textStyle: await styleNameOf((node as any).textStyleId),
+    align,
+  };
+
+  if (segs.length <= 1) {
+    if (segs.length) {
+      const one = await segOut(segs[0]);
+      base.font = one.font;
+      base.color = one.color;
+      base.colorVariable = one.colorVariable;
+    }
+  } else {
+    base.segments = await Promise.all(segs.map(segOut));
   }
+  return prune(base);
 }
 
-// --- component identity -----------------------------------------------------
+// --- component identity + override capture ---------------------------------
 
-async function serializeComponent(node: InstanceNode): Promise<unknown> {
-  const main = await node.getMainComponentAsync();
+function variantsOf(node: InstanceNode): Record<string, string> | undefined {
   const variants: Record<string, string> = {};
   const props = node.componentProperties ?? {};
   for (const [k, v] of Object.entries(props)) {
     if ((v as any).type === 'VARIANT') variants[k.split('#')[0]] = String((v as any).value);
   }
-  return {
-    name: main?.name ?? node.name,
-    componentSet: main?.parent?.type === 'COMPONENT_SET' ? main.parent.name : undefined,
-    variants: Object.keys(variants).length ? variants : undefined,
-  };
+  return Object.keys(variants).length ? variants : undefined;
+}
+
+async function componentName(node: InstanceNode): Promise<string> {
+  const main = await node.getMainComponentAsync();
+  if (main?.parent?.type === 'COMPONENT_SET') return main.parent.name;
+  return main?.name ?? node.name;
+}
+
+/** Scan an instance's subtree for the content worth keeping when we don't
+ *  expand it: nested component (icon) names and visible text. */
+async function scanOverrides(node: SceneNode): Promise<Record<string, unknown>> {
+  const components: string[] = [];
+  const texts: string[] = [];
+  async function walk(n: any): Promise<void> {
+    for (const c of n.children ?? []) {
+      if (c.visible === false) continue;
+      if (c.type === 'INSTANCE') {
+        components.push(await componentName(c));
+        await walk(c);
+      } else if (c.type === 'TEXT') {
+        if (c.characters?.trim()) texts.push(c.characters);
+      } else {
+        await walk(c);
+      }
+    }
+  }
+  await walk(node);
+  const uniq = [...new Set(components)];
+  return prune({
+    icon: uniq.length === 1 ? uniq[0] : undefined,
+    components: uniq.length > 1 ? uniq : undefined,
+    text: texts.length ? texts.join(' ') : undefined,
+  });
 }
 
 // --- node walk --------------------------------------------------------------
 
-function prune<T extends Record<string, unknown>>(o: T): T {
-  for (const k of Object.keys(o)) if (o[k] === undefined) delete o[k];
-  return o;
-}
-
 async function serializeNode(node: SceneNode, depth: number, ref: Set<string>): Promise<unknown> {
   const n = node as any;
-  const out: Record<string, unknown> = {
-    id: node.id,
-    name: node.name,
-    type: node.type,
-  };
-  if (node.type === 'INSTANCE') out.component = await serializeComponent(node);
+  const out: Record<string, unknown> = {};
+  if (!options.dropIds) out.id = node.id;
+  out.name = node.name;
+  out.type = node.type;
+
+  // Instance as an atom: identity + captured overrides, no internals.
+  if (node.type === 'INSTANCE' && !options.expandInstances) {
+    out.component = await componentName(node);
+    out.variants = variantsOf(node);
+    Object.assign(out, await scanOverrides(node));
+    const fixed = n.layoutSizingHorizontal === 'FIXED' || !('layoutMode' in n) || n.layoutMode === 'NONE';
+    if (fixed && 'width' in n) out.size = { width: Math.round(n.width), height: Math.round(n.height) };
+    return prune(out);
+  }
+  if (node.type === 'INSTANCE') {
+    out.component = await componentName(node);
+    out.variants = variantsOf(node);
+  }
 
   if (node.type === 'TEXT') {
-    out.text = await serializeText(node, ref);
+    Object.assign(out, await compactText(node, ref));
   } else {
-    if ('layoutMode' in n) out.layout = await serializeLayout(n, ref);
-    if ('constraints' in n) out.constraints = serializeConstraints(n);
-  }
-
-  if ('fills' in n && node.type !== 'TEXT') out.fills = await serializePaints(n, 'fills', ref);
-  if ('strokes' in n && n.strokes?.length) {
-    out.strokes = await serializePaints(n, 'strokes', ref);
-    out.strokeWeight = typeof n.strokeWeight === 'number' ? n.strokeWeight : undefined;
-    out.strokeAlign = n.strokeAlign;
-  }
-  if ('cornerRadius' in n) out.cornerRadius = await serializeRadius(n, ref);
-  if ('effects' in n) out.effects = serializeEffects(n);
-  if ('opacity' in n && n.opacity !== 1) out.opacity = n.opacity;
-  if (!('layoutMode' in n) || n.layoutMode === 'NONE') {
-    if ('width' in n) out.size = { width: Math.round(n.width), height: Math.round(n.height) };
+    if ('layoutMode' in n) out.layout = await compactLayout(n, ref);
+    out.constraints = compactConstraints(n);
+    if ('fills' in n) out.fills = await compactPaints(n, 'fills', ref);
+    if ('strokes' in n && n.strokes?.length) {
+      out.strokes = await compactPaints(n, 'strokes', ref);
+      out.strokeWeight = typeof n.strokeWeight === 'number' && n.strokeWeight ? n.strokeWeight : undefined;
+    }
+    if ('cornerRadius' in n) out.cornerRadius = await compactRadius(n, ref);
+    if ('effects' in n) out.effects = compactEffects(n);
+    if ('opacity' in n && n.opacity !== 1) out.opacity = n.opacity;
+    const hasChildren = 'children' in node && node.children.length > 0;
+    if (!hasChildren && 'width' in n) out.size = { width: Math.round(n.width), height: Math.round(n.height) };
   }
 
   if ('children' in node && node.children.length && depth < 50) {
@@ -364,17 +427,17 @@ async function serializeNode(node: SceneNode, depth: number, ref: Set<string>): 
       if ('visible' in child && child.visible === false) continue;
       kids.push(await safeSerialize(child, depth + 1, ref));
     }
-    out.children = kids;
+    if (kids.length) out.children = kids;
   }
   return prune(out);
 }
 
-/** One throwing node (e.g. an odd text run) degrades to a stub, never sinks the export. */
+/** One throwing node degrades to a stub, never sinks the whole export. */
 async function safeSerialize(node: SceneNode, depth: number, ref: Set<string>): Promise<unknown> {
   try {
     return await serializeNode(node, depth, ref);
   } catch (e) {
-    return { id: node.id, name: node.name, type: node.type, error: String(e) };
+    return { name: node.name, type: node.type, error: String(e) };
   }
 }
 
@@ -396,19 +459,25 @@ async function run(forceCatalogRefresh = false): Promise<void> {
 
   const doc = {
     schemaVersion: '1.0',
-    source: { file: figma.root.name, selection: sel.map((n) => n.id) },
+    source: { file: figma.root.name },
     nodes,
-    variables: buildFigmaShaped(catalog),
-    tokens: buildTokens(catalog),
+    variables: buildFigmaShaped(catalog, options.modes),
+    tokens: buildTokens(catalog, options.modes),
   };
 
   figma.ui.postMessage({ type: 'result', json: JSON.stringify(doc, null, 2), empty: sel.length === 0 });
 }
 
-figma.showUI(__html__, { width: 480, height: 600, title: 'Design Extractor' });
-figma.ui.onmessage = async (msg: { type: string }) => {
-  if (msg.type === 'export') await run(true); // manual Re-read forces a fresh catalog
-  if (msg.type === 'close') figma.closePlugin();
+figma.showUI(__html__, { width: 480, height: 620, title: 'Design Extractor' });
+figma.ui.onmessage = async (msg: any) => {
+  if (msg.type === 'options') {
+    options = { ...options, ...msg.options };
+    await run();
+  } else if (msg.type === 'export') {
+    await run(true); // manual Re-read forces a fresh catalog pull
+  } else if (msg.type === 'close') {
+    figma.closePlugin();
+  }
 };
 run();
 figma.on('selectionchange', () => run());

@@ -25,6 +25,9 @@
       .primary { background: #0d99ff; color: #fff; }
       .ghost { background: #e5e5e5; color: #111; }
       #status { color: #2a8c4a; font-size: 11px; min-height: 14px; }
+      .opts { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 11px; }
+      .opts label { display: flex; gap: 4px; align-items: center; cursor: pointer; }
+      .opts select { font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid #ccc; }
     </style>
   </head>
   <body>
@@ -33,11 +36,22 @@
       <button class="ghost" id="refresh">Re-read</button>
       <button class="primary" id="copy">Copy JSON</button>
     </div>
+    <div class="opts">
+      <label><input type="checkbox" id="expand" /> Expand instances</label>
+      <label><input type="checkbox" id="dropIds" checked /> Drop ids</label>
+      <label>Modes
+        <select id="modes">
+          <option value="lightDark" selected>Light + Dark</option>
+          <option value="default">Default only</option>
+          <option value="all">All</option>
+        </select>
+      </label>
+    </div>
     <div class="hint">
-      Select one or more frames — output updates automatically. Exports
-      <code>nodes</code> (tree + layout/style/colour + bound-variable refs),
-      <code>variables</code> (lossless Figma-shaped catalog), and
-      <code>tokens</code> (W3C/DTCG). Copy the JSON for downstream tooling.
+      Select one or more frames — output updates automatically. Exports compact
+      <code>nodes</code> (tree + layout/style/colour + bound-variable refs;
+      instances as atoms), <code>variables</code> (name-keyed catalog), and
+      <code>tokens</code> (W3C/DTCG). Copy the JSON for codegen.
     </div>
     <textarea id="out" spellcheck="false" readonly></textarea>
     <div id="status"></div>
@@ -45,6 +59,18 @@
     <script>
       const out = document.getElementById('out');
       const status = (m) => { document.getElementById('status').textContent = m; };
+
+      const getOptions = () => ({
+        expandInstances: document.getElementById('expand').checked,
+        dropIds: document.getElementById('dropIds').checked,
+        modes: document.getElementById('modes').value,
+      });
+      const sendOptions = () =>
+        parent.postMessage({ pluginMessage: { type: 'options', options: getOptions() } }, '*');
+
+      for (const id of ['expand', 'dropIds', 'modes']) {
+        document.getElementById(id).addEventListener('change', sendOptions);
+      }
 
       onmessage = (e) => {
         const msg = e.data.pluginMessage;

@@ -81,6 +81,19 @@ function indexById<T extends { id: string }>(rows: T[]): Record<string, T> {
   return m;
 }
 
+export type ModeOption = 'all' | 'lightDark' | 'default';
+
+/** Mode ids to keep for a collection: all, default-only, or default + a Dark mode. */
+export function selectModeIds(coll: RawCollection, opt: ModeOption): string[] {
+  if (opt === 'all') return coll.modes.map((m) => m.id);
+  const ids = [coll.defaultModeId];
+  if (opt === 'lightDark') {
+    const dark = coll.modes.find((m) => m.id !== coll.defaultModeId && /dark/i.test(m.name));
+    if (dark) ids.push(dark.id);
+  }
+  return ids;
+}
+
 /** Value of `variable` in `modeId`, falling back to its collection default, then any. */
 function pickModeValue(
   variable: RawVariable,
@@ -118,30 +131,32 @@ function serializeRaw(v: RawValue, varById: Record<string, RawVariable>): FigmaS
   }
 }
 
-/** Lossless mirror of Figma's structure; aliases kept (with resolved name). */
-export function buildFigmaShaped(catalog: RawCatalog) {
+/** Catalog mirror, keyed by mode *name* (ids dropped). Aliases kept (resolved
+ *  name). `modes` limits which modes are emitted (default keeps all). */
+export function buildFigmaShaped(catalog: RawCatalog, modes: ModeOption = 'all') {
   const varById = indexById(catalog.variables);
   return {
-    collections: catalog.collections.map((coll) => ({
-      id: coll.id,
-      name: coll.name,
-      modes: coll.modes,
-      defaultModeId: coll.defaultModeId,
-      variables: catalog.variables
-        .filter((v) => v.collectionId === coll.id)
-        .map((v) => ({
-          id: v.id,
-          name: v.name,
-          type: v.type,
-          scopes: v.scopes,
-          valuesByMode: Object.fromEntries(
-            Object.entries(v.valuesByMode).map(([mode, val]) => [
-              mode,
-              serializeRaw(val, varById),
-            ]),
-          ),
-        })),
-    })),
+    collections: catalog.collections.map((coll) => {
+      const keep = new Set(selectModeIds(coll, modes));
+      const modeName: Record<string, string> = {};
+      for (const m of coll.modes) modeName[m.id] = m.name;
+      return {
+        name: coll.name,
+        modes: coll.modes.filter((m) => keep.has(m.id)).map((m) => m.name),
+        defaultMode: modeName[coll.defaultModeId],
+        variables: catalog.variables
+          .filter((v) => v.collectionId === coll.id)
+          .map((v) => ({
+            name: v.name,
+            type: v.type,
+            valuesByMode: Object.fromEntries(
+              Object.entries(v.valuesByMode)
+                .filter(([mode]) => keep.has(mode))
+                .map(([mode, val]) => [modeName[mode] ?? mode, serializeRaw(val, varById)]),
+            ),
+          })),
+      };
+    }),
   };
 }
 
@@ -215,8 +230,8 @@ interface TokenNode {
 }
 
 /** Build a DTCG token tree from the catalog. Default mode -> `$value`;
- *  non-default modes + figma metadata -> `$extensions["com.figma"]`. */
-export function buildTokens(catalog: RawCatalog): TokenNode {
+ *  non-default selected modes + figma metadata -> `$extensions["com.figma"]`. */
+export function buildTokens(catalog: RawCatalog, modes: ModeOption = 'all'): TokenNode {
   const varById = indexById(catalog.variables);
   const collById = indexById(catalog.collections);
   const root: TokenNode = {};
@@ -224,6 +239,7 @@ export function buildTokens(catalog: RawCatalog): TokenNode {
   for (const v of catalog.variables) {
     const coll = collById[v.collectionId];
     if (!coll) continue;
+    const keep = new Set(selectModeIds(coll, modes));
     const $type = dtcgType(v);
 
     // navigate/create the nested group for this name path
@@ -242,10 +258,10 @@ export function buildTokens(catalog: RawCatalog): TokenNode {
     // resolved literal of the default mode (handy when $value is a reference)
     const resolved = resolveToLiteral(v.valuesByMode[coll.defaultModeId], coll.defaultModeId, varById, collById);
     if (resolved !== null) figmaExt.resolved = resolved;
-    // non-default modes
+    // non-default selected modes
     const extraModes: Record<string, unknown> = {};
     for (const m of coll.modes) {
-      if (m.id === coll.defaultModeId) continue;
+      if (m.id === coll.defaultModeId || !keep.has(m.id)) continue;
       extraModes[m.name] = dtcgValue(v, v.valuesByMode[m.id], $type, varById);
     }
     if (Object.keys(extraModes).length) figmaExt.modes = extraModes;

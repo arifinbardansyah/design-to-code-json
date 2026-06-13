@@ -40,7 +40,7 @@ eq('pathToRef', T.pathToRef('color/primitive/green/500'), '{color.primitive.gree
 const catalog = {
   collections: [
     { id: 'C1', name: 'Primitives', modes: [{ id: 'p0', name: 'Value' }], defaultModeId: 'p0' },
-    { id: 'C2', name: 'Semantic', modes: [{ id: 's0', name: 'Light' }, { id: 's1', name: 'Dark' }], defaultModeId: 's0' },
+    { id: 'C2', name: 'Semantic', modes: [{ id: 's0', name: 'Light' }, { id: 's1', name: 'Dark' }, { id: 's2', name: 'Brand' }], defaultModeId: 's0' },
   ],
   variables: [
     {
@@ -56,22 +56,34 @@ const catalog = {
       valuesByMode: {
         s0: { kind: 'COLOR', rgba: { r: 0.0667, g: 0.6745, b: 0.2902, a: 1 } }, // literal #11AC4A
         s1: { kind: 'ALIAS', id: 'V_green500' }, // Dark -> aliases a primitive
+        s2: { kind: 'COLOR', rgba: { r: 1, g: 0, b: 0, a: 1 } }, // Brand -> #FF0000
       },
     },
     {
       id: 'V_radiusMd', name: 'radius/md', type: 'FLOAT', collectionId: 'C2', scopes: ['CORNER_RADIUS'],
-      valuesByMode: { s0: { kind: 'FLOAT', value: 12 }, s1: { kind: 'FLOAT', value: 12 } },
+      valuesByMode: { s0: { kind: 'FLOAT', value: 12 }, s1: { kind: 'FLOAT', value: 12 }, s2: { kind: 'FLOAT', value: 12 } },
     },
   ],
 };
 
-// --- Figma-shaped (lossless) ------------------------------------------------
-const shaped = T.buildFigmaShaped(catalog);
+// --- Figma-shaped (name-keyed) ----------------------------------------------
+const shaped = T.buildFigmaShaped(catalog); // 'all' modes
 eq('shaped has 2 collections', shaped.collections.length, 2);
 const semantic = shaped.collections.find((c) => c.name === 'Semantic');
 const bgVar = semantic.variables.find((v) => v.name === 'color/bg/primary/bold');
-eq('shaped default literal kept as hex', bgVar.valuesByMode.s0, '#11AC4A');
-eq('shaped alias kept with resolved name', bgVar.valuesByMode.s1, { type: 'VARIABLE_ALIAS', id: 'V_green500', name: 'color/primitive/green/500' });
+eq('shaped default literal keyed by mode name', bgVar.valuesByMode.Light, '#11AC4A');
+eq('shaped alias kept with resolved name', bgVar.valuesByMode.Dark, { type: 'VARIABLE_ALIAS', id: 'V_green500', name: 'color/primitive/green/500' });
+eq('shaped defaultMode is a name', semantic.defaultMode, 'Light');
+
+// --- mode filtering ---------------------------------------------------------
+const ld = T.buildFigmaShaped(catalog, 'lightDark').collections.find((c) => c.name === 'Semantic');
+eq('lightDark keeps Light+Dark only', ld.modes, ['Light', 'Dark']);
+eq('lightDark drops Brand value', ld.variables[0].valuesByMode.Brand, undefined);
+const def = T.buildFigmaShaped(catalog, 'default').collections.find((c) => c.name === 'Semantic');
+eq('default keeps one mode', def.modes, ['Light']);
+const ldTokens = T.buildTokens(catalog, 'lightDark');
+eq('lightDark tokens drop Brand mode', ldTokens.color.bg.primary.bold.$extensions['com.figma'].modes.Brand, undefined);
+eq('lightDark tokens keep Dark mode', ldTokens.color.bg.primary.bold.$extensions['com.figma'].modes.Dark, '{color.primitive.green.500}');
 
 // --- alias resolution -------------------------------------------------------
 const varById = Object.fromEntries(catalog.variables.map((v) => [v.id, v]));
