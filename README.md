@@ -10,28 +10,32 @@ system assumptions; useful for any codegen, token pipeline, or LLM workflow.
 ```jsonc
 {
   "schemaVersion": "1.0",
-  "source": { "file": "...", "selection": ["1:5"] },
 
-  // 1) The selected tree. Layout / style / colour / effects / text, and every
-  //    variable-bound property carries an inline { id, name } reference.
+  // 1) The selected tree. Colours and text styles are emitted as *references*
+  //    (names) that resolve into the catalogs below; raw values appear only
+  //    when a property isn't bound to a variable/style. e.g.
+  //    { "type":"TEXT", "characters":"Section title",
+  //      "textStyle":"M3/headline/small", "color":"#1D1B20" }
+  //    { "type":"FRAME", "fill":"Schemes/Surface", ... }
   "nodes": [ /* ...recursive node objects... */ ],
 
-  // 2) Lossless mirror of Figma's variables: collections -> modes ->
-  //    valuesByMode. Aliases kept as { type:"VARIABLE_ALIAS", id, name }.
+  // 2) Typography catalog: text-style name -> font definition.
+  "textStyles": { "M3/headline/small": { "family":"Roboto", "size":24, "lineHeight":32 } },
+
+  // 3) Variables, keyed by mode name. Aliases kept as
+  //    { type:"VARIABLE_ALIAS", name }. Modes limited per the Modes option.
   "variables": { "collections": [ /* ... */ ] },
 
-  // 3) Same catalog as W3C/DTCG tokens: $type/$value nested by name.
-  //    Aliases -> "{group.path}" references; extra modes + figma metadata
+  // 4) Same catalog as W3C/DTCG tokens: $type/$value nested by name.
+  //    Aliases -> "{group.path}" references; extra modes + resolved literal
   //    under $extensions["com.figma"].
-  "tokens": { "color": { "bg": { /* ... */ } } }
+  "tokens": { "Schemes": { "Surface": { /* ... */ } } }
 }
 ```
 
-See the plan/`tool/test_transform.mjs` for a worked example.
-
 The output is **compacted for codegen**: default/zero values are omitted,
-spacing collapses to a bare number (or `{value, variable}` when bound),
-single-style text is hoisted onto the node, and Figma ids are dropped.
+spacing collapses to a bare number (or `{value, variable}` when bound), and
+**colours / text styles are references**, defined once in the catalogs.
 
 ### What each node carries
 
@@ -42,11 +46,13 @@ single-style text is hoisted onto the node, and Figma ids are dropped.
 - **Layout** (auto-layout) — `mode` (row/column), `gap`, `padding`, axis
   alignment (only when non-default), `sizing` (HUG/FILL/FIXED); each spacing
   value carries its bound `variable` when set.
-- **Style** — `fills`/`strokes` (`{color, variable?}`, gradients/images
-  summarised), `strokeWeight`, `cornerRadius`, `effects`, `opacity`.
-- **Text** — `characters`, `textStyle`, hoisted `font` (family/size/lineHeight,
-  plus weight & letterSpacing when non-default), `color` + `colorVariable`.
-  Genuinely mixed text keeps a per-run `segments` array.
+- **Style** — `fill`/`stroke` as a colour reference (variable name) or hex when
+  unbound; multiple/gradient/image fills use a `fills`/`strokes` array.
+  Plus `strokeWeight`, `cornerRadius`, `effects`, `opacity`.
+- **Text** — `characters`, a `textStyle` reference (font defined once in
+  `textStyles`), and `color` (a variable reference or hex). Ad-hoc text with no
+  bound style inlines a `font` object instead. Genuinely mixed text keeps a
+  per-run `segments` array.
 - **Constraints** — only when non-default (e.g. `SCALE` icons).
 
 ### Options (in the plugin panel)

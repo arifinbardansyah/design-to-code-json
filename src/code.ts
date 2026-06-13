@@ -1,12 +1,9 @@
 // Figma plugin main thread. Walks the current selection into a compact,
-// codegen-friendly `nodes` tree and emits the file's variable catalog in two
-// shapes: `variables` (Figma-shaped, name-keyed) and `tokens` (W3C/DTCG).
-// Output is one JSON document posted to the UI. No design-system coupling.
-//
-// Compaction: default/zero values are omitted, single-style text is hoisted,
-// component instances are treated as atoms (component + variants + captured
-// icon/text overrides) unless "expand instances" is on, and Figma ids are
-// dropped. All toggled from the UI.
+// codegen-friendly `nodes` tree and emits reference catalogs: `textStyles`
+// (typography), `variables` (Figma-shaped, name-keyed) and `tokens` (W3C/DTCG).
+// Colours and text styles in `nodes` are emitted as *references* (names) that
+// resolve into those catalogs; raw values appear only when unbound. Output is
+// one JSON document posted to the UI. No design-system coupling.
 
 import {
   rgbaToHex,
@@ -148,7 +145,7 @@ async function buildCatalog(referenced: Set<string>): Promise<RawCatalog> {
   return { collections: [...maps.collections.values()], variables: [...maps.variables.values()] };
 }
 
-// --- options ----------------------------------------------------------------
+// --- options & per-run context ---------------------------------------------
 
 interface Options {
   expandInstances: boolean;
@@ -157,8 +154,13 @@ interface Options {
 }
 let options: Options = { expandInstances: false, modes: 'lightDark', dropIds: true };
 
-/** Drop keys whose value is `undefined` (JSON already omits them, but this
- *  keeps intermediate objects clean and lets callers test emptiness). */
+/** Per-run accumulators (kept off module scope so concurrent runs don't race). */
+interface Ctx {
+  vars: Set<string>; // bound variable ids referenced by the selection
+  textStyles: Set<string>; // text style ids referenced by the selection
+}
+
+/** Drop keys whose value is `undefined`. */
 function prune<T extends Record<string, unknown>>(o: T): T {
   for (const k of Object.keys(o)) if (o[k] === undefined) delete o[k];
   return o;
@@ -166,9 +168,9 @@ function prune<T extends Record<string, unknown>>(o: T): T {
 
 // --- bound-variable helpers (record id for the catalog, return the name) ----
 
-async function boundVarName(alias: VariableAlias | undefined, ref: Set<string>): Promise<string | undefined> {
+async function boundVarName(alias: VariableAlias | undefined, ctx: Ctx): Promise<string | undefined> {
   if (!alias?.id) return undefined;
-  ref.add(alias.id);
+  ctx.vars.add(alias.id);
   const v = await getVar(alias.id);
   return v?.name ?? undefined;
 }
@@ -185,38 +187,52 @@ function paintBound(node: any, field: 'fills' | 'strokes', index: number): Varia
 
 /** A dimension: a bare number, `{value, variable}` when bound, or undefined
  *  when zero and unbound. */
-async function dim(px: number, alias: VariableAlias | undefined, ref: Set<string>): Promise<unknown> {
-  const variable = await boundVarName(alias, ref);
+async function dim(px: number, alias: VariableAlias | undefined, ctx: Ctx): Promise<unknown> {
+  const variable = await boundVarName(alias, ctx);
   if (variable) return { value: px, variable };
   return px ? px : undefined;
 }
 
-// --- paint / effect / radius / layout / constraints -------------------------
+// --- colour: a variable-name reference when bound, else a hex literal -------
 
-async function compactPaints(node: any, field: 'fills' | 'strokes', ref: Set<string>): Promise<unknown[] | undefined> {
+async function colorOf(paint: any, alias: VariableAlias | undefined, ctx: Ctx): Promise<string | undefined> {
+  const name = await boundVarName(alias, ctx);
+  if (name) return name;
+  if (paint?.type === 'SOLID') {
+    return rgbaToHex({ r: paint.color.r, g: paint.color.g, b: paint.color.b, a: paint.opacity ?? 1 });
+  }
+  return undefined;
+}
+
+/** Returns `{ one }` for a single solid paint (-> scalar `fill`/`stroke`), or
+ *  `{ many }` for multiple / non-solid paints (-> `fills`/`strokes` array). */
+async function serializePaints(node: any, field: 'fills' | 'strokes', ctx: Ctx): Promise<{ one?: string; many?: unknown[] }> {
   const paints = node[field];
-  if (!paints || paints === figma.mixed || !Array.isArray(paints) || !paints.length) return undefined;
-  const out: unknown[] = [];
+  if (!paints || paints === figma.mixed || !Array.isArray(paints) || !paints.length) return {};
+  const entries: unknown[] = [];
+  let solo: string | undefined;
+  let onlySolid = true;
   for (let i = 0; i < paints.length; i++) {
     const p = paints[i];
     if (p.visible === false) continue;
     if (p.type === 'SOLID') {
-      const variable = await boundVarName(paintBound(node, field, i), ref);
-      out.push(prune({
-        color: rgbaToHex({ r: p.color.r, g: p.color.g, b: p.color.b, a: p.opacity ?? 1 }),
-        variable,
-      }));
+      const c = await colorOf(p, paintBound(node, field, i), ctx);
+      entries.push({ color: c });
+      solo = c;
     } else if (p.type.startsWith('GRADIENT')) {
-      out.push({
-        gradient: p.type,
-        stops: p.gradientStops?.map((s: any) => ({ position: s.position, color: rgbaToHex(s.color) })),
-      });
+      onlySolid = false;
+      entries.push({ gradient: p.type, stops: p.gradientStops?.map((s: any) => ({ position: s.position, color: rgbaToHex(s.color) })) });
     } else if (p.type === 'IMAGE') {
-      out.push({ image: p.scaleMode });
+      onlySolid = false;
+      entries.push({ image: p.scaleMode });
     }
   }
-  return out.length ? out : undefined;
+  if (!entries.length) return {};
+  if (entries.length === 1 && onlySolid && solo !== undefined) return { one: solo };
+  return { many: entries };
 }
+
+// --- effects / radius / layout / constraints --------------------------------
 
 function compactEffects(node: any): unknown[] | undefined {
   const fx = node.effects;
@@ -238,31 +254,31 @@ function compactEffects(node: any): unknown[] | undefined {
   return out.length ? out : undefined;
 }
 
-async function compactRadius(node: any, ref: Set<string>): Promise<unknown | undefined> {
+async function compactRadius(node: any, ctx: Ctx): Promise<unknown | undefined> {
   const r = node.cornerRadius;
-  if (typeof r === 'number') return dim(r, scalarBound(node, 'topLeftRadius'), ref);
+  if (typeof r === 'number') return dim(r, scalarBound(node, 'topLeftRadius'), ctx);
   const corners = ['topLeftRadius', 'topRightRadius', 'bottomRightRadius', 'bottomLeftRadius'] as const;
   if (corners.some((c) => node[c] > 0)) {
     const obj: Record<string, unknown> = {};
-    for (const c of corners) obj[c] = await dim(node[c] ?? 0, scalarBound(node, c), ref);
+    for (const c of corners) obj[c] = await dim(node[c] ?? 0, scalarBound(node, c), ctx);
     return prune(obj);
   }
   return undefined;
 }
 
-async function compactLayout(node: any, ref: Set<string>): Promise<unknown | undefined> {
+async function compactLayout(node: any, ctx: Ctx): Promise<unknown | undefined> {
   if (!('layoutMode' in node) || node.layoutMode === 'NONE') return undefined;
   const padding = prune({
-    top: await dim(node.paddingTop ?? 0, scalarBound(node, 'paddingTop'), ref),
-    right: await dim(node.paddingRight ?? 0, scalarBound(node, 'paddingRight'), ref),
-    bottom: await dim(node.paddingBottom ?? 0, scalarBound(node, 'paddingBottom'), ref),
-    left: await dim(node.paddingLeft ?? 0, scalarBound(node, 'paddingLeft'), ref),
+    top: await dim(node.paddingTop ?? 0, scalarBound(node, 'paddingTop'), ctx),
+    right: await dim(node.paddingRight ?? 0, scalarBound(node, 'paddingRight'), ctx),
+    bottom: await dim(node.paddingBottom ?? 0, scalarBound(node, 'paddingBottom'), ctx),
+    left: await dim(node.paddingLeft ?? 0, scalarBound(node, 'paddingLeft'), ctx),
   });
   const bothHug = node.layoutSizingHorizontal === 'HUG' && node.layoutSizingVertical === 'HUG';
   // Under SPACE_BETWEEN itemSpacing is Figma's auto-computed leftover — meaningless.
   const gap = node.primaryAxisAlignItems === 'SPACE_BETWEEN'
     ? undefined
-    : await dim(node.itemSpacing ?? 0, scalarBound(node, 'itemSpacing'), ref);
+    : await dim(node.itemSpacing ?? 0, scalarBound(node, 'itemSpacing'), ctx);
   return prune({
     mode: node.layoutMode === 'HORIZONTAL' ? 'row' : 'column',
     wrap: node.layoutWrap === 'WRAP' ? true : undefined,
@@ -280,7 +296,7 @@ function compactConstraints(node: any): unknown | undefined {
   return { horizontal: c.horizontal, vertical: c.vertical };
 }
 
-// --- text -------------------------------------------------------------------
+// --- typography -------------------------------------------------------------
 
 async function styleNameOf(id: unknown): Promise<string | undefined> {
   if (typeof id !== 'string' || !id) return undefined;
@@ -292,33 +308,29 @@ async function styleNameOf(id: unknown): Promise<string | undefined> {
   }
 }
 
-async function compactText(node: TextNode, ref: Set<string>): Promise<Record<string, unknown>> {
-  const fields = [
+/** Build a font definition from a styled segment or a TextStyle (same fields). */
+function buildFont(src: any): Record<string, unknown> {
+  const lh = src.lineHeight;
+  const ls = typeof src.letterSpacing === 'object' ? src.letterSpacing.value : src.letterSpacing;
+  return prune({
+    family: src.fontName?.family,
+    style: src.fontName?.style && src.fontName.style !== 'Regular' ? src.fontName.style : undefined,
+    size: src.fontSize,
+    lineHeight: !lh || lh.unit === 'AUTO' ? undefined : lh.value,
+    letterSpacing: ls ? Math.round(ls * 1000) / 1000 : undefined,
+    decoration: src.textDecoration && src.textDecoration !== 'NONE' ? src.textDecoration : undefined,
+  });
+}
+
+async function compactText(node: TextNode, ctx: Ctx): Promise<Record<string, unknown>> {
+  const styleId = (node as any).textStyleId;
+  const styleName = await styleNameOf(styleId);
+  if (styleName && typeof styleId === 'string') ctx.textStyles.add(styleId);
+
+  const segs = node.getStyledTextSegments([
     'fontName', 'fontSize', 'fills', 'textStyleId',
     'textDecoration', 'letterSpacing', 'lineHeight', 'boundVariables',
-  ] as const;
-  const segs = node.getStyledTextSegments(fields as any);
-
-  const segOut = async (s: any) => {
-    const fillBound = s.boundVariables?.fills?.[0];
-    const color = Array.isArray(s.fills) && s.fills[0]?.type === 'SOLID'
-      ? rgbaToHex({ r: s.fills[0].color.r, g: s.fills[0].color.g, b: s.fills[0].color.b, a: s.fills[0].opacity ?? 1 })
-      : undefined;
-    const lsRaw = typeof s.letterSpacing === 'object' ? s.letterSpacing.value : s.letterSpacing;
-    const ls = lsRaw ? Math.round(lsRaw * 1000) / 1000 : undefined; // strip float noise
-    return prune({
-      characters: s.characters,
-      font: prune({
-        family: s.fontName?.family,
-        style: s.fontName?.style && s.fontName.style !== 'Regular' ? s.fontName.style : undefined,
-        size: s.fontSize,
-        lineHeight: s.lineHeight?.unit === 'AUTO' ? undefined : s.lineHeight?.value,
-        letterSpacing: ls,
-      }),
-      color,
-      colorVariable: await boundVarName(isAlias(fillBound) ? fillBound : undefined, ref),
-    });
-  };
+  ] as any);
 
   const align = (node.textAlignHorizontal !== 'LEFT' || node.textAlignVertical !== 'TOP')
     ? prune({
@@ -326,23 +338,37 @@ async function compactText(node: TextNode, ref: Set<string>): Promise<Record<str
         vertical: node.textAlignVertical !== 'TOP' ? node.textAlignVertical : undefined,
       })
     : undefined;
-  const base: Record<string, unknown> = {
-    characters: node.characters,
-    textStyle: await styleNameOf((node as any).textStyleId),
-    align,
-  };
 
+  const segColor = (s: any) =>
+    colorOf(Array.isArray(s.fills) ? s.fills[0] : undefined, isAlias(s.boundVariables?.fills?.[0]) ? s.boundVariables.fills[0] : undefined, ctx);
+
+  const base: Record<string, unknown> = { characters: node.characters, textStyle: styleName, align };
   if (segs.length <= 1) {
-    if (segs.length) {
-      const one = await segOut(segs[0]);
-      base.font = one.font;
-      base.color = one.color;
-      base.colorVariable = one.colorVariable;
+    const s = segs[0];
+    if (s) {
+      base.color = await segColor(s);
+      if (!styleName) base.font = buildFont(s); // inline only when no shared style
     }
   } else {
-    base.segments = await Promise.all(segs.map(segOut));
+    base.segments = await Promise.all(
+      segs.map(async (s: any) => prune({ characters: s.characters, font: buildFont(s), color: await segColor(s) })),
+    );
   }
   return prune(base);
+}
+
+/** Resolve referenced text style ids to a name -> font-definition catalog. */
+async function buildTextStyles(ids: Set<string>): Promise<Record<string, unknown> | undefined> {
+  const out: Record<string, unknown> = {};
+  for (const id of ids) {
+    try {
+      const st = await figma.getStyleByIdAsync(id);
+      if (st && st.type === 'TEXT') out[st.name] = buildFont(st as TextStyle);
+    } catch {
+      // ignore unreadable style
+    }
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 // --- component identity + override capture ---------------------------------
@@ -391,7 +417,7 @@ async function scanOverrides(node: SceneNode): Promise<Record<string, unknown>> 
 
 // --- node walk --------------------------------------------------------------
 
-async function serializeNode(node: SceneNode, depth: number, ref: Set<string>): Promise<unknown> {
+async function serializeNode(node: SceneNode, depth: number, ctx: Ctx): Promise<unknown> {
   const n = node as any;
   const out: Record<string, unknown> = {};
   if (!options.dropIds) out.id = node.id;
@@ -413,16 +439,22 @@ async function serializeNode(node: SceneNode, depth: number, ref: Set<string>): 
   }
 
   if (node.type === 'TEXT') {
-    Object.assign(out, await compactText(node, ref));
+    Object.assign(out, await compactText(node, ctx));
   } else {
-    if ('layoutMode' in n) out.layout = await compactLayout(n, ref);
+    if ('layoutMode' in n) out.layout = await compactLayout(n, ctx);
     out.constraints = compactConstraints(n);
-    if ('fills' in n) out.fills = await compactPaints(n, 'fills', ref);
+    if ('fills' in n) {
+      const f = await serializePaints(n, 'fills', ctx);
+      if (f.one !== undefined) out.fill = f.one;
+      else if (f.many) out.fills = f.many;
+    }
     if ('strokes' in n && n.strokes?.length) {
-      out.strokes = await compactPaints(n, 'strokes', ref);
+      const s = await serializePaints(n, 'strokes', ctx);
+      if (s.one !== undefined) out.stroke = s.one;
+      else if (s.many) out.strokes = s.many;
       out.strokeWeight = typeof n.strokeWeight === 'number' && n.strokeWeight ? n.strokeWeight : undefined;
     }
-    if ('cornerRadius' in n) out.cornerRadius = await compactRadius(n, ref);
+    if ('cornerRadius' in n) out.cornerRadius = await compactRadius(n, ctx);
     if ('effects' in n) out.effects = compactEffects(n);
     if ('opacity' in n && n.opacity !== 1) out.opacity = n.opacity;
     const hasChildren = 'children' in node && node.children.length > 0;
@@ -433,7 +465,7 @@ async function serializeNode(node: SceneNode, depth: number, ref: Set<string>): 
     const kids: unknown[] = [];
     for (const child of node.children) {
       if ('visible' in child && child.visible === false) continue;
-      kids.push(await safeSerialize(child, depth + 1, ref));
+      kids.push(await safeSerialize(child, depth + 1, ctx));
     }
     if (kids.length) out.children = kids;
   }
@@ -441,9 +473,9 @@ async function serializeNode(node: SceneNode, depth: number, ref: Set<string>): 
 }
 
 /** One throwing node degrades to a stub, never sinks the whole export. */
-async function safeSerialize(node: SceneNode, depth: number, ref: Set<string>): Promise<unknown> {
+async function safeSerialize(node: SceneNode, depth: number, ctx: Ctx): Promise<unknown> {
   try {
-    return await serializeNode(node, depth, ref);
+    return await serializeNode(node, depth, ctx);
   } catch (e) {
     return { name: node.name, type: node.type, error: String(e) };
   }
@@ -458,20 +490,21 @@ async function run(forceCatalogRefresh = false): Promise<void> {
   if (forceCatalogRefresh) localCatalogCache = null;
 
   const sel = figma.currentPage.selection;
-  const referenced = new Set<string>();
+  const ctx: Ctx = { vars: new Set(), textStyles: new Set() };
   const nodes: unknown[] = [];
-  for (const node of sel) nodes.push(await safeSerialize(node, 0, referenced));
+  for (const node of sel) nodes.push(await safeSerialize(node, 0, ctx));
 
-  const catalog = await buildCatalog(referenced);
+  const catalog = await buildCatalog(ctx.vars);
+  const textStyles = await buildTextStyles(ctx.textStyles);
   if (seq !== runSeq) return; // a newer run superseded this one — drop stale result
 
-  const doc = {
+  const doc = prune({
     schemaVersion: '1.0',
-    source: { file: figma.root.name },
     nodes,
+    textStyles,
     variables: buildFigmaShaped(catalog, options.modes),
     tokens: buildTokens(catalog, options.modes, options.dropIds),
-  };
+  });
 
   figma.ui.postMessage({ type: 'result', json: JSON.stringify(doc, null, 2), empty: sel.length === 0 });
 }
