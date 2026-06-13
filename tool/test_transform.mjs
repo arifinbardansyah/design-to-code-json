@@ -25,18 +25,19 @@ function eq(label, got, want) {
   console.log(`${ok ? '  ok ' : 'FAIL'}  ${label}` + (ok ? '' : `\n        got  ${JSON.stringify(got)}\n        want ${JSON.stringify(want)}`));
   ok ? pass++ : fail++;
 }
+function truthy(label, got) {
+  const ok = !!got;
+  console.log(`${ok ? '  ok ' : 'FAIL'}  ${label}` + (ok ? '' : `  got ${JSON.stringify(got)}`));
+  ok ? pass++ : fail++;
+}
 
 // --- colour -----------------------------------------------------------------
 eq('opaque green -> #11AC4A', T.rgbaToHex({ r: 0.0667, g: 0.6745, b: 0.2902, a: 1 }), '#11AC4A');
 eq('translucent -> #RRGGBBAA', T.rgbaToHex({ r: 0, g: 0, b: 0, a: 0.15 }), '#00000026');
 eq('white', T.rgbaToHex({ r: 1, g: 1, b: 1, a: 1 }), '#FFFFFF');
 
-// --- name helpers -----------------------------------------------------------
-eq('nameToPath', T.nameToPath('color/bg/primary/bold'), ['color', 'bg', 'primary', 'bold']);
-eq('pathToRef', T.pathToRef('color/primitive/green/500'), '{color.primitive.green.500}');
-
 // --- synthetic catalog ------------------------------------------------------
-// Primitives collection (single mode) + Semantic collection (Light/Dark).
+// Primitives (single mode) + Semantic (Light default / Dark / Brand).
 const catalog = {
   collections: [
     { id: 'C1', name: 'Primitives', modes: [{ id: 'p0', name: 'Value' }], defaultModeId: 'p0' },
@@ -44,70 +45,53 @@ const catalog = {
   ],
   variables: [
     {
-      id: 'V_green500', name: 'color/primitive/green/500', type: 'COLOR', collectionId: 'C1', scopes: ['ALL_FILLS'],
+      id: 'V_green500', name: 'color/primitive/green/500', type: 'COLOR', collectionId: 'C1', scopes: [],
       valuesByMode: { p0: { kind: 'COLOR', rgba: { r: 0.11, g: 0.796, b: 0.36, a: 1 } } },
     },
     {
-      id: 'V_green600', name: 'color/primitive/green/600', type: 'COLOR', collectionId: 'C1', scopes: ['ALL_FILLS'],
-      valuesByMode: { p0: { kind: 'COLOR', rgba: { r: 0.0667, g: 0.6745, b: 0.2902, a: 1 } } },
-    },
-    {
-      id: 'V_bgPrimaryBold', name: 'color/bg/primary/bold', type: 'COLOR', collectionId: 'C2', scopes: ['ALL_FILLS'],
+      id: 'V_bgPrimaryBold', name: 'color/bg/primary/bold', type: 'COLOR', collectionId: 'C2', scopes: [],
       valuesByMode: {
-        s0: { kind: 'COLOR', rgba: { r: 0.0667, g: 0.6745, b: 0.2902, a: 1 } }, // literal #11AC4A
-        s1: { kind: 'ALIAS', id: 'V_green500' }, // Dark -> aliases a primitive
-        s2: { kind: 'COLOR', rgba: { r: 1, g: 0, b: 0, a: 1 } }, // Brand -> #FF0000
+        s0: { kind: 'COLOR', rgba: { r: 0.0667, g: 0.6745, b: 0.2902, a: 1 } }, // #11AC4A
+        s1: { kind: 'ALIAS', id: 'V_green500' }, // Dark -> primitive
+        s2: { kind: 'COLOR', rgba: { r: 1, g: 0, b: 0, a: 1 } }, // Brand #FF0000
       },
     },
     {
-      id: 'V_radiusMd', name: 'radius/md', type: 'FLOAT', collectionId: 'C2', scopes: ['CORNER_RADIUS'],
-      valuesByMode: { s0: { kind: 'FLOAT', value: 12 }, s1: { kind: 'FLOAT', value: 12 }, s2: { kind: 'FLOAT', value: 12 } },
+      id: 'V_radiusMd', name: 'radius/md', type: 'FLOAT', collectionId: 'C2', scopes: [],
+      valuesByMode: { s0: { kind: 'FLOAT', value: 12 }, s1: { kind: 'FLOAT', value: 12 }, s2: { kind: 'FLOAT', value: 16 } },
     },
   ],
 };
-
-// --- Figma-shaped (name-keyed) ----------------------------------------------
-const shaped = T.buildFigmaShaped(catalog); // 'all' modes
-eq('shaped has 2 collections', shaped.collections.length, 2);
-const semantic = shaped.collections.find((c) => c.name === 'Semantic');
-const bgVar = semantic.variables.find((v) => v.name === 'color/bg/primary/bold');
-eq('shaped default literal keyed by mode name', bgVar.valuesByMode.Light, '#11AC4A');
-eq('shaped alias kept with resolved name', bgVar.valuesByMode.Dark, { type: 'VARIABLE_ALIAS', id: 'V_green500', name: 'color/primitive/green/500' });
-eq('shaped defaultMode is a name', semantic.defaultMode, 'Light');
-
-// --- mode filtering ---------------------------------------------------------
-const ld = T.buildFigmaShaped(catalog, 'lightDark').collections.find((c) => c.name === 'Semantic');
-eq('lightDark keeps Light+Dark only', ld.modes, ['Light', 'Dark']);
-eq('lightDark drops Brand value', ld.variables[0].valuesByMode.Brand, undefined);
-const def = T.buildFigmaShaped(catalog, 'default').collections.find((c) => c.name === 'Semantic');
-eq('default keeps one mode', def.modes, ['Light']);
-const ldTokens = T.buildTokens(catalog, 'lightDark');
-eq('lightDark tokens drop Brand mode', ldTokens.color.bg.primary.bold.$extensions['com.figma'].modes.Brand, undefined);
-eq('lightDark tokens keep Dark mode', ldTokens.color.bg.primary.bold.$extensions['com.figma'].modes.Dark, '{color.primitive.green.500}');
-eq('tokens keep id by default', typeof T.buildTokens(catalog).color.bg.primary.bold.$extensions['com.figma'].id, 'string');
-eq('dropIds removes token id', T.buildTokens(catalog, 'all', true).color.bg.primary.bold.$extensions['com.figma'].id, undefined);
-
-// --- alias resolution -------------------------------------------------------
 const varById = Object.fromEntries(catalog.variables.map((v) => [v.id, v]));
 const collById = Object.fromEntries(catalog.collections.map((c) => [c.id, c]));
+
+// --- mode selection ---------------------------------------------------------
+eq('lightDark picks default + Dark', T.selectModeIds(collById.C2, 'lightDark'), ['s0', 's1']);
+eq('default picks one', T.selectModeIds(collById.C2, 'default'), ['s0']);
+eq('all picks every mode', T.selectModeIds(collById.C2, 'all').length, 3);
+
+// --- alias resolution -------------------------------------------------------
 eq('resolve alias chain -> literal', T.resolveToLiteral({ kind: 'ALIAS', id: 'V_bgPrimaryBold' }, 's1', varById, collById), '#1CCB5C');
-// cycle guard: make a self-referential pair
-const cyclic = { ...varById, A: { id: 'A', name: 'a', type: 'COLOR', collectionId: 'C1', scopes: [], valuesByMode: { p0: { kind: 'ALIAS', id: 'B' } } }, B: { id: 'B', name: 'b', type: 'COLOR', collectionId: 'C1', scopes: [], valuesByMode: { p0: { kind: 'ALIAS', id: 'A' } } } };
+const cyclic = { A: { id: 'A', name: 'a', type: 'COLOR', collectionId: 'C1', scopes: [], valuesByMode: { p0: { kind: 'ALIAS', id: 'B' } } }, B: { id: 'B', name: 'b', type: 'COLOR', collectionId: 'C1', scopes: [], valuesByMode: { p0: { kind: 'ALIAS', id: 'A' } } } };
 eq('cycle guard returns null', T.resolveToLiteral({ kind: 'ALIAS', id: 'A' }, 'p0', cyclic, collById), null);
 
-// --- DTCG tokens ------------------------------------------------------------
-const tokens = T.buildTokens(catalog);
-const bgTok = tokens.color.bg.primary.bold;
-eq('token nests by name path', typeof bgTok, 'object');
-eq('token $type color', bgTok.$type, 'color');
-eq('token default $value is literal', bgTok.$value, '#11AC4A');
-eq('token Dark mode -> reference', bgTok.$extensions['com.figma'].modes.Dark, '{color.primitive.green.500}');
-eq('token carries collection', bgTok.$extensions['com.figma'].collection, 'Semantic');
-const radTok = tokens.radius.md;
-eq('FLOAT under dimension hint -> dimension', radTok.$type, 'dimension');
-eq('dimension $value has px', radTok.$value, '12px');
-// a primitive aliased by another resolves; semantic default literal resolves to itself
-eq('bg default resolved literal', bgTok.$extensions['com.figma'].resolved, '#11AC4A');
+// --- flat catalog -----------------------------------------------------------
+const referenced = new Set(['V_bgPrimaryBold', 'V_radiusMd']); // primitive not directly referenced
+const flat = T.buildFlatCatalog(catalog, referenced, 'lightDark');
+eq('colors: referenced-only, resolved per mode', flat.colors, {
+  'color/bg/primary/bold': { Light: '#11AC4A', Dark: '#1CCB5C' },
+});
+eq('dimensions: FLOAT vars as numbers', flat.dimensions, { 'radius/md': { Light: 12, Dark: 12 } });
+truthy('primitive (unreferenced) excluded', flat.colors['color/primitive/green/500'] === undefined);
+
+const flatDefault = T.buildFlatCatalog(catalog, referenced, 'default');
+eq('default mode -> single value', flatDefault.colors['color/bg/primary/bold'], { Light: '#11AC4A' });
+
+const flatAll = T.buildFlatCatalog(catalog, referenced, 'all');
+eq('all modes incl Brand', flatAll.colors['color/bg/primary/bold'], { Light: '#11AC4A', Dark: '#1CCB5C', Brand: '#FF0000' });
+
+const empty = T.buildFlatCatalog(catalog, new Set(), 'all');
+eq('no references -> empty catalog', empty, {});
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -7,8 +7,7 @@
 
 import {
   rgbaToHex,
-  buildFigmaShaped,
-  buildTokens,
+  buildFlatCatalog,
   type ModeOption,
   type RawCatalog,
   type RawCollection,
@@ -507,13 +506,14 @@ async function run(forceCatalogRefresh = false): Promise<void> {
   const textStyles = await buildTextStyles(ctx.textStyles);
   if (seq !== runSeq) return; // a newer run superseded this one — drop stale result
 
+  const flat = buildFlatCatalog(catalog, ctx.vars, options.modes);
   const doc = prune({
     schemaVersion: '1.0',
     components,
     nodes,
+    colors: flat.colors,
     textStyles,
-    variables: buildFigmaShaped(catalog, options.modes),
-    tokens: buildTokens(catalog, options.modes, options.dropIds),
+    dimensions: flat.dimensions,
   });
 
   figma.ui.postMessage({ type: 'result', json: JSON.stringify(doc, null, 2), empty: sel.length === 0 });

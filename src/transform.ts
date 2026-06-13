@@ -1,5 +1,6 @@
-// Pure, Figma-API-free transforms: colour conversion, the lossless
-// Figma-shaped variable catalog, and the W3C/DTCG design-tokens tree.
+// Pure, Figma-API-free transforms: colour conversion and the flat reference
+// catalog (variable name -> resolved value per mode) that the `colors` /
+// `dimensions` sections of the output are built from.
 //
 // `code.ts` reads the live document and lowers it to the plain `RawCatalog`
 // intermediate below; everything here operates on that, so it can be unit
@@ -58,28 +59,7 @@ export function rgbaToHex(c: Rgba): string {
   return c.a >= 1 ? base : `${base}${hex2(c.a)}`;
 }
 
-// --- name helpers ----------------------------------------------------------
-
-/** Split a variable name on `/` into trimmed path segments. */
-export function nameToPath(name: string): string[] {
-  return name
-    .split('/')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-/** DTCG alias reference, e.g. `color/primitive/green/500` -> `{color.primitive.green.500}`. */
-export function pathToRef(name: string): string {
-  return `{${nameToPath(name).join('.')}}`;
-}
-
-// --- index helpers ---------------------------------------------------------
-
-function indexById<T extends { id: string }>(rows: T[]): Record<string, T> {
-  const m: Record<string, T> = {};
-  for (const r of rows) m[r.id] = r;
-  return m;
-}
+// --- mode selection ---------------------------------------------------------
 
 export type ModeOption = 'all' | 'lightDark' | 'default';
 
@@ -92,6 +72,14 @@ export function selectModeIds(coll: RawCollection, opt: ModeOption): string[] {
     if (dark) ids.push(dark.id);
   }
   return ids;
+}
+
+// --- index + alias resolution ----------------------------------------------
+
+function indexById<T extends { id: string }>(rows: T[]): Record<string, T> {
+  const m: Record<string, T> = {};
+  for (const r of rows) m[r.id] = r;
+  return m;
 }
 
 /** Value of `variable` in `modeId`, falling back to its collection default, then any. */
@@ -108,62 +96,8 @@ function pickModeValue(
   return first ? byMode[first] : undefined;
 }
 
-// --- Figma-shaped (lossless) catalog ---------------------------------------
-
-type FigmaShapedValue =
-  | string
-  | number
-  | boolean
-  | { type: 'VARIABLE_ALIAS'; id: string; name: string | null };
-
-function serializeRaw(v: RawValue, varById: Record<string, RawVariable>): FigmaShapedValue {
-  switch (v.kind) {
-    case 'COLOR':
-      return rgbaToHex(v.rgba);
-    case 'FLOAT':
-      return v.value;
-    case 'STRING':
-      return v.value;
-    case 'BOOLEAN':
-      return v.value;
-    case 'ALIAS':
-      return { type: 'VARIABLE_ALIAS', id: v.id, name: varById[v.id]?.name ?? null };
-  }
-}
-
-/** Catalog mirror, keyed by mode *name* (ids dropped). Aliases kept (resolved
- *  name). `modes` limits which modes are emitted (default keeps all). */
-export function buildFigmaShaped(catalog: RawCatalog, modes: ModeOption = 'all') {
-  const varById = indexById(catalog.variables);
-  return {
-    collections: catalog.collections.map((coll) => {
-      const keep = new Set(selectModeIds(coll, modes));
-      const modeName: Record<string, string> = {};
-      for (const m of coll.modes) modeName[m.id] = m.name;
-      return {
-        name: coll.name,
-        modes: coll.modes.filter((m) => keep.has(m.id)).map((m) => m.name),
-        defaultMode: modeName[coll.defaultModeId],
-        variables: catalog.variables
-          .filter((v) => v.collectionId === coll.id)
-          .map((v) => ({
-            name: v.name,
-            type: v.type,
-            valuesByMode: Object.fromEntries(
-              Object.entries(v.valuesByMode)
-                .filter(([mode]) => keep.has(mode))
-                .map(([mode, val]) => [modeName[mode] ?? mode, serializeRaw(val, varById)]),
-            ),
-          })),
-      };
-    }),
-  };
-}
-
-// --- alias resolution (chain -> literal, cycle-guarded) --------------------
-
-/** Follow an alias chain to its final literal value (or null). For convenience
- *  fields; the DTCG `$value` keeps the *reference* rather than resolving. */
+/** Follow an alias chain to its final literal value (hex / number / string /
+ *  boolean), or null. Cycle-guarded. */
 export function resolveToLiteral(
   value: RawValue | undefined,
   modeId: string,
@@ -184,98 +118,49 @@ export function resolveToLiteral(
   return resolveToLiteral(pickModeValue(target, modeId, collById), modeId, varById, collById, seen);
 }
 
-// --- W3C / DTCG token tree -------------------------------------------------
+// --- flat reference catalog -------------------------------------------------
 
-const DIMENSION_HINTS = [
-  'radius', 'space', 'spacing', 'gap', 'padding', 'inset',
-  'size', 'width', 'height', 'dimension',
-];
-
-function dtcgType(v: RawVariable): string {
-  switch (v.type) {
-    case 'COLOR':
-      return 'color';
-    case 'STRING':
-      return 'string';
-    case 'BOOLEAN':
-      return 'boolean';
-    case 'FLOAT': {
-      const lower = v.name.toLowerCase();
-      return DIMENSION_HINTS.some((h) => lower.includes(h)) ? 'dimension' : 'number';
-    }
-  }
+export interface FlatCatalog {
+  colors?: Record<string, Record<string, string>>;
+  dimensions?: Record<string, Record<string, number>>;
 }
 
-/** Render one mode's value as a DTCG `$value`: literal serialized per `$type`,
- *  alias as a `{ref}`. */
-function dtcgValue(
-  v: RawVariable,
-  raw: RawValue | undefined,
-  $type: string,
-  varById: Record<string, RawVariable>,
-): string | number | boolean | null {
-  if (!raw) return null;
-  if (raw.kind === 'ALIAS') {
-    const target = varById[raw.id];
-    return target ? pathToRef(target.name) : null;
-  }
-  if (raw.kind === 'COLOR') return rgbaToHex(raw.rgba);
-  if (raw.kind === 'FLOAT') return $type === 'dimension' ? `${raw.value}px` : raw.value;
-  if (raw.kind === 'STRING') return raw.value;
-  return raw.value; // BOOLEAN
-}
-
-interface TokenNode {
-  [key: string]: TokenNode | unknown;
-}
-
-/** Build a DTCG token tree from the catalog. Default mode -> `$value`;
- *  non-default selected modes + figma metadata -> `$extensions["com.figma"]`. */
-export function buildTokens(catalog: RawCatalog, modes: ModeOption = 'all', dropIds = false): TokenNode {
+/**
+ * Flat, codegen-friendly catalog of the variables the selection actually
+ * references: `name -> { mode: resolved value }`. COLOR variables go to
+ * `colors` (hex), FLOAT to `dimensions` (number); aliases are resolved to their
+ * final literal. Limited to `referenced` ids and the selected `modes`.
+ */
+export function buildFlatCatalog(
+  catalog: RawCatalog,
+  referenced: Set<string>,
+  modes: ModeOption = 'all',
+): FlatCatalog {
   const varById = indexById(catalog.variables);
   const collById = indexById(catalog.collections);
-  const root: TokenNode = {};
+  const colors: Record<string, Record<string, string>> = {};
+  const dimensions: Record<string, Record<string, number>> = {};
 
   for (const v of catalog.variables) {
+    if (!referenced.has(v.id)) continue;
     const coll = collById[v.collectionId];
     if (!coll) continue;
-    const keep = new Set(selectModeIds(coll, modes));
-    const $type = dtcgType(v);
+    const modeName: Record<string, string> = {};
+    for (const m of coll.modes) modeName[m.id] = m.name;
 
-    // navigate/create the nested group for this name path
-    const path = nameToPath(v.name);
-    let node = root;
-    for (let i = 0; i < path.length - 1; i++) {
-      const key = path[i];
-      if (typeof node[key] !== 'object' || node[key] === null) node[key] = {};
-      node = node[key] as TokenNode;
+    const perMode: Record<string, string | number> = {};
+    for (const modeId of selectModeIds(coll, modes)) {
+      const lit = resolveToLiteral(v.valuesByMode[modeId], modeId, varById, collById);
+      if (lit !== null && typeof lit !== 'boolean') perMode[modeName[modeId] ?? modeId] = lit;
     }
-    const leaf = path[path.length - 1];
+    if (!Object.keys(perMode).length) continue;
 
-    const defVal = dtcgValue(v, v.valuesByMode[coll.defaultModeId], $type, varById);
-
-    const figmaExt: Record<string, unknown> = dropIds
-      ? { collection: coll.name }
-      : { id: v.id, collection: coll.name };
-    // resolved literal of the default mode (handy when $value is a reference)
-    const resolved = resolveToLiteral(v.valuesByMode[coll.defaultModeId], coll.defaultModeId, varById, collById);
-    if (resolved !== null) figmaExt.resolved = resolved;
-    // non-default selected modes
-    const extraModes: Record<string, unknown> = {};
-    for (const m of coll.modes) {
-      if (m.id === coll.defaultModeId || !keep.has(m.id)) continue;
-      extraModes[m.name] = dtcgValue(v, v.valuesByMode[m.id], $type, varById);
-    }
-    if (Object.keys(extraModes).length) figmaExt.modes = extraModes;
-
-    const token: TokenNode = {
-      $type,
-      $value: defVal,
-      $extensions: { 'com.figma': figmaExt },
-    };
-    // merge onto any existing group node at this key (token + subgroup coexist)
-    node[leaf] = Object.assign(typeof node[leaf] === 'object' && node[leaf] ? node[leaf] : {}, token);
+    if (v.type === 'COLOR') colors[v.name] = perMode as Record<string, string>;
+    else if (v.type === 'FLOAT') dimensions[v.name] = perMode as Record<string, number>;
   }
 
-  return root;
+  const out: FlatCatalog = {};
+  if (Object.keys(colors).length) out.colors = colors;
+  if (Object.keys(dimensions).length) out.dimensions = dimensions;
+  return out;
 }

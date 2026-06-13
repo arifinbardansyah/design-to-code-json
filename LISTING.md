@@ -12,25 +12,25 @@ Export any selection to JSON — nodes, variables & tokens
 Design Extractor turns a Figma selection into one clean JSON document you can
 feed to codegen, a token pipeline, or an LLM.
 
-It captures three things:
+It captures:
 
-• **nodes** — the layer tree with auto-layout (direction, gap, padding, sizing),
-  constraints, fills/strokes/effects, corner radius, opacity, full text with
-  per-run styling, and component name + variants. Every property that is bound
-  to a Figma variable carries an inline reference to it.
+• **nodes** — a compact layer tree: auto-layout (direction, gap, padding,
+  sizing), corner radius, effects, opacity, text, and component name + variants.
+  Component instances collapse to atoms with captured icon/text overrides.
 
-• **variables** — a lossless mirror of the file's variable collections: modes,
-  per-mode values, and aliases kept exactly as authored.
+• **colors / textStyles / dimensions** — flat catalogs of the variables and text
+  styles the selection uses, name → value per mode (Light/Dark). A node's
+  `fill` / `color` / `textStyle` is just a reference into them; raw values appear
+  only when a property isn't bound to a variable/style.
 
-• **tokens** — the same catalog as standard W3C/DTCG design tokens
-  ($type/$value, nested by name). Aliases become {references}; extra modes and
-  the resolved value are kept under $extensions.
+• **components** (optional) — turn on "Dedupe components" to extract repeated
+  subtrees into reusable definitions, with the differing fields lifted to props.
 
-Runs entirely offline — nothing leaves your file. Works on any plan.
+The result maps almost 1:1 onto Jetpack Compose / Flutter. Runs entirely
+offline — nothing leaves your file. Works on any plan.
 
 How to use: select one or more frames, open the plugin, and copy the JSON.
-Output updates as you change your selection; “Re-read” forces a fresh pull of
-the variable catalog.
+Output updates as you change your selection.
 
 ## Tags
 design tokens, variables, json, export, developer, design systems, code,

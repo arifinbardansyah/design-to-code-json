@@ -1,9 +1,9 @@
 # Design Extractor (Figma plugin)
 
-Exports the selected frame(s) as a single structured **JSON** document — the
-node tree, the file's full **variable catalog**, and a standards-friendly
-**design-tokens** view — with complete bound-variable information. No design
-system assumptions; useful for any codegen, token pipeline, or LLM workflow.
+Exports the selected frame(s) as a single structured **JSON** document — a
+compact node tree plus flat reference catalogs for the **colours** and **text
+styles** it uses, with bound-variable names preserved. No design-system
+assumptions; built for codegen (Jetpack Compose, Flutter, …) and LLM workflows.
 
 ## Output
 
@@ -24,23 +24,24 @@ system assumptions; useful for any codegen, token pipeline, or LLM workflow.
   //    { "type":"FRAME", "fill":"Schemes/Surface", ... }
   "nodes": [ /* ...recursive node objects... */ ],
 
-  // 2) Typography catalog: text-style name -> font definition.
+  // 2) Colour catalog the `fill`/`color` references resolve into: the
+  //    referenced variables only, name -> { mode: value } (aliases resolved).
+  "colors": { "Schemes/Surface": { "Light": "#FEF7FF", "Dark": "#141218" } },
+
+  // 3) Typography catalog the `textStyle` references resolve into.
   "textStyles": { "M3/headline/small": { "family":"Roboto", "size":24, "lineHeight":32 } },
 
-  // 3) Variables, keyed by mode name. Aliases kept as
-  //    { type:"VARIABLE_ALIAS", name }. Modes limited per the Modes option.
-  "variables": { "collections": [ /* ... */ ] },
-
-  // 4) Same catalog as W3C/DTCG tokens: $type/$value nested by name.
-  //    Aliases -> "{group.path}" references; extra modes + resolved literal
-  //    under $extensions["com.figma"].
-  "tokens": { "Schemes": { "Surface": { /* ... */ } } }
+  // 4) Same shape as `colors`, for FLOAT (spacing/radius) variables, when any
+  //    dimension is bound to a variable.
+  "dimensions": { "spacing/md": { "Light": 16 } }
 }
 ```
 
 The output is **compacted for codegen**: default/zero values are omitted,
 spacing collapses to a bare number (or `{value, variable}` when bound), and
-**colours / text styles are references**, defined once in the catalogs.
+**colours / text styles are references** resolved once in flat catalogs
+(`colors`, `textStyles`, `dimensions`) — limited to what the selection uses,
+in the modes you pick.
 
 ### What each node carries
 
@@ -85,13 +86,14 @@ For each group of ≥2 occurrences:
 If occurrences are identical, the component simply has no props. Components are
 extracted outermost-first (internals stay inside the template).
 
-### Variables vs tokens
+### Reference catalogs
 
-Same data, two shapes. `variables` mirrors Figma's structure keyed by mode
-**name**, aliases kept as `{type:"VARIABLE_ALIAS", name}`. `tokens` is the
-**interoperable** DTCG view (imports into Style Dictionary / Tokens Studio); an
-aliasing token's `$value` is a `{reference}`, with the flattened literal under
-`$extensions["com.figma"].resolved`.
+`colors` and `dimensions` are flat maps of the variables the selection
+references: `name -> { mode: value }`, with aliases (semantic → primitive)
+resolved to their final literal. `textStyles` is the same idea for typography.
+A node's `fill` / `color` / `textStyle` is a key into these maps (or a raw hex
+when the property isn't bound to a variable). Switch **Modes** to `Light + Dark`
+to emit both theme values for each colour.
 
 ## Build & verify
 
@@ -99,8 +101,8 @@ aliasing token's `$value` is a `{reference}`, with the flattened literal under
 npm install
 npm run check    # unit tests + bundle
 # individually:
-npm run test     # 18 assertions: colour, alias resolution + cycle guard,
-                 # Figma-shaped lossless, DTCG token tree
+npm run test     # transform (colour, alias resolution + cycle guard, flat
+                 # catalog) + component synthesis assertions
 npm run build    # bundle src/code.ts -> dist/code.js
 ```
 
