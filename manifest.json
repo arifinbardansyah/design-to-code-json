@@ -1,0 +1,12 @@
+{
+  "name": "Design Extractor",
+  "id": "figma-design-extractor",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "src/ui.html",
+  "editorType": ["figma", "dev"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  }
+}

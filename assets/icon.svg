@@ -1,0 +1,25 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0D99FF"/>
+      <stop offset="1" stop-color="#6172F3"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <!-- token rows: colored value dot + name bar (a list of design tokens) -->
+  <g>
+    <circle cx="38" cy="40" r="7" fill="#1CCB5C"/>
+    <rect x="54" y="34" width="44" height="12" rx="6" fill="#FFFFFF"/>
+
+    <circle cx="38" cy="64" r="7" fill="#EA6025"/>
+    <rect x="54" y="58" width="36" height="12" rx="6" fill="#FFFFFF" fill-opacity="0.92"/>
+
+    <circle cx="38" cy="88" r="7" fill="#2E90FA"/>
+    <rect x="54" y="82" width="40" height="12" rx="6" fill="#FFFFFF" fill-opacity="0.84"/>
+  </g>
+  <!-- frame corner ticks (evoking a Figma frame being extracted) -->
+  <g stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-opacity="0.55" fill="none">
+    <path d="M20 30 V20 H30"/>
+    <path d="M108 98 V108 H98"/>
+  </g>
+</svg>

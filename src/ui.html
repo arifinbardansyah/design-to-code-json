@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root { color-scheme: light dark; }
+      * { box-sizing: border-box; }
+      body {
+        font: 12px -apple-system, 'Segoe UI', Roboto, sans-serif;
+        margin: 0; padding: 12px; display: flex; flex-direction: column;
+        gap: 8px; height: 100vh;
+      }
+      .row { display: flex; gap: 8px; align-items: center; }
+      h1 { font-size: 13px; margin: 0; flex: 1; }
+      .hint { color: #888; font-size: 11px; line-height: 1.4; }
+      textarea {
+        flex: 1; width: 100%; resize: none; font-family: ui-monospace, Menlo, monospace;
+        font-size: 11px; line-height: 1.45; padding: 8px; border: 1px solid #ccc;
+        border-radius: 6px; white-space: pre; overflow: auto;
+      }
+      button {
+        border: 0; border-radius: 6px; padding: 7px 12px; font-size: 12px;
+        font-weight: 600; cursor: pointer;
+      }
+      .primary { background: #0d99ff; color: #fff; }
+      .ghost { background: #e5e5e5; color: #111; }
+      #status { color: #2a8c4a; font-size: 11px; min-height: 14px; }
+    </style>
+  </head>
+  <body>
+    <div class="row">
+      <h1>Design Extractor</h1>
+      <button class="ghost" id="refresh">Re-read</button>
+      <button class="primary" id="copy">Copy JSON</button>
+    </div>
+    <div class="hint">
+      Select one or more frames — output updates automatically. Exports
+      <code>nodes</code> (tree + layout/style/colour + bound-variable refs),
+      <code>variables</code> (lossless Figma-shaped catalog), and
+      <code>tokens</code> (W3C/DTCG). Copy the JSON for downstream tooling.
+    </div>
+    <textarea id="out" spellcheck="false" readonly></textarea>
+    <div id="status"></div>
+
+    <script>
+      const out = document.getElementById('out');
+      const status = (m) => { document.getElementById('status').textContent = m; };
+
+      onmessage = (e) => {
+        const msg = e.data.pluginMessage;
+        if (msg && msg.type === 'result') {
+          out.value = msg.empty ? '// Select one or more frames, then run again.' : msg.json;
+          status('');
+        }
+      };
+      document.getElementById('refresh').onclick = () =>
+        parent.postMessage({ pluginMessage: { type: 'export' } }, '*');
+      document.getElementById('copy').onclick = async () => {
+        out.select();
+        try {
+          await navigator.clipboard.writeText(out.value);
+          status('Copied to clipboard.');
+        } catch {
+          document.execCommand('copy');
+          status('Copied.');
+        }
+      };
+    </script>
+  </body>
+</html>

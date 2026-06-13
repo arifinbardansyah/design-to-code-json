@@ -1,0 +1,19 @@
+{
+  "name": "figma-design-extractor",
+  "version": "0.1.0",
+  "description": "Figma plugin: export the selected frame as structured JSON — node tree, variables, and W3C design-tokens — with full bound-variable info.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node tool/build.mjs",
+    "test": "node tool/test_transform.mjs",
+    "assets": "node tool/render_assets.mjs",
+    "check": "npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.100.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  }
+}
