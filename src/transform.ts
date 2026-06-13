@@ -231,7 +231,7 @@ interface TokenNode {
 
 /** Build a DTCG token tree from the catalog. Default mode -> `$value`;
  *  non-default selected modes + figma metadata -> `$extensions["com.figma"]`. */
-export function buildTokens(catalog: RawCatalog, modes: ModeOption = 'all'): TokenNode {
+export function buildTokens(catalog: RawCatalog, modes: ModeOption = 'all', dropIds = false): TokenNode {
   const varById = indexById(catalog.variables);
   const collById = indexById(catalog.collections);
   const root: TokenNode = {};
@@ -254,7 +254,9 @@ export function buildTokens(catalog: RawCatalog, modes: ModeOption = 'all'): Tok
 
     const defVal = dtcgValue(v, v.valuesByMode[coll.defaultModeId], $type, varById);
 
-    const figmaExt: Record<string, unknown> = { id: v.id, collection: coll.name };
+    const figmaExt: Record<string, unknown> = dropIds
+      ? { collection: coll.name }
+      : { id: v.id, collection: coll.name };
     // resolved literal of the default mode (handy when $value is a reference)
     const resolved = resolveToLiteral(v.valuesByMode[coll.defaultModeId], coll.defaultModeId, varById, collById);
     if (resolved !== null) figmaExt.resolved = resolved;

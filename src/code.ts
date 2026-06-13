@@ -259,10 +259,14 @@ async function compactLayout(node: any, ref: Set<string>): Promise<unknown | und
     left: await dim(node.paddingLeft ?? 0, scalarBound(node, 'paddingLeft'), ref),
   });
   const bothHug = node.layoutSizingHorizontal === 'HUG' && node.layoutSizingVertical === 'HUG';
+  // Under SPACE_BETWEEN itemSpacing is Figma's auto-computed leftover — meaningless.
+  const gap = node.primaryAxisAlignItems === 'SPACE_BETWEEN'
+    ? undefined
+    : await dim(node.itemSpacing ?? 0, scalarBound(node, 'itemSpacing'), ref);
   return prune({
     mode: node.layoutMode === 'HORIZONTAL' ? 'row' : 'column',
     wrap: node.layoutWrap === 'WRAP' ? true : undefined,
-    gap: await dim(node.itemSpacing ?? 0, scalarBound(node, 'itemSpacing'), ref),
+    gap,
     padding: Object.keys(padding).length ? padding : undefined,
     primaryAxisAlign: node.primaryAxisAlignItems !== 'MIN' ? node.primaryAxisAlignItems : undefined,
     counterAxisAlign: node.counterAxisAlignItems !== 'MIN' ? node.counterAxisAlignItems : undefined,
@@ -300,7 +304,8 @@ async function compactText(node: TextNode, ref: Set<string>): Promise<Record<str
     const color = Array.isArray(s.fills) && s.fills[0]?.type === 'SOLID'
       ? rgbaToHex({ r: s.fills[0].color.r, g: s.fills[0].color.g, b: s.fills[0].color.b, a: s.fills[0].opacity ?? 1 })
       : undefined;
-    const ls = typeof s.letterSpacing === 'object' ? s.letterSpacing.value : s.letterSpacing;
+    const lsRaw = typeof s.letterSpacing === 'object' ? s.letterSpacing.value : s.letterSpacing;
+    const ls = lsRaw ? Math.round(lsRaw * 1000) / 1000 : undefined; // strip float noise
     return prune({
       characters: s.characters,
       font: prune({
@@ -308,7 +313,7 @@ async function compactText(node: TextNode, ref: Set<string>): Promise<Record<str
         style: s.fontName?.style && s.fontName.style !== 'Regular' ? s.fontName.style : undefined,
         size: s.fontSize,
         lineHeight: s.lineHeight?.unit === 'AUTO' ? undefined : s.lineHeight?.value,
-        letterSpacing: ls ? ls : undefined,
+        letterSpacing: ls,
       }),
       color,
       colorVariable: await boundVarName(isAlias(fillBound) ? fillBound : undefined, ref),
@@ -316,7 +321,10 @@ async function compactText(node: TextNode, ref: Set<string>): Promise<Record<str
   };
 
   const align = (node.textAlignHorizontal !== 'LEFT' || node.textAlignVertical !== 'TOP')
-    ? { horizontal: node.textAlignHorizontal, vertical: node.textAlignVertical }
+    ? prune({
+        horizontal: node.textAlignHorizontal !== 'LEFT' ? node.textAlignHorizontal : undefined,
+        vertical: node.textAlignVertical !== 'TOP' ? node.textAlignVertical : undefined,
+      })
     : undefined;
   const base: Record<string, unknown> = {
     characters: node.characters,
@@ -462,7 +470,7 @@ async function run(forceCatalogRefresh = false): Promise<void> {
     source: { file: figma.root.name },
     nodes,
     variables: buildFigmaShaped(catalog, options.modes),
-    tokens: buildTokens(catalog, options.modes),
+    tokens: buildTokens(catalog, options.modes, options.dropIds),
   };
 
   figma.ui.postMessage({ type: 'result', json: JSON.stringify(doc, null, 2), empty: sel.length === 0 });

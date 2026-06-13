@@ -84,6 +84,8 @@ eq('default keeps one mode', def.modes, ['Light']);
 const ldTokens = T.buildTokens(catalog, 'lightDark');
 eq('lightDark tokens drop Brand mode', ldTokens.color.bg.primary.bold.$extensions['com.figma'].modes.Brand, undefined);
 eq('lightDark tokens keep Dark mode', ldTokens.color.bg.primary.bold.$extensions['com.figma'].modes.Dark, '{color.primitive.green.500}');
+eq('tokens keep id by default', typeof T.buildTokens(catalog).color.bg.primary.bold.$extensions['com.figma'].id, 'string');
+eq('dropIds removes token id', T.buildTokens(catalog, 'all', true).color.bg.primary.bold.$extensions['com.figma'].id, undefined);
 
 // --- alias resolution -------------------------------------------------------
 const varById = Object.fromEntries(catalog.variables.map((v) => [v.id, v]));
