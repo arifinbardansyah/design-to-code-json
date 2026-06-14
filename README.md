@@ -1,5 +1,7 @@
 # Design to Code JSON (Figma plugin)
 
+**▶ Install from Figma Community:** https://www.figma.com/community/plugin/1647834863384185949
+
 Exports the selected frame(s) as a single structured **JSON** document — a
 compact node tree plus flat reference catalogs for the **colours** and **text
 styles** it uses, with bound-variable names preserved. No design-system
