@@ -6,7 +6,7 @@ Paste these into the Figma **Publish** modal. Assets are in `assets/`.
 Design to Code JSON
 
 ## Tagline (≤ ~60 chars)
-Export any selection to JSON — nodes, variables & tokens
+Any selection → codegen-ready JSON (Compose/Flutter)
 
 ## Description
 Design to Code JSON turns a Figma selection into one clean JSON document you can
@@ -33,8 +33,8 @@ How to use: select one or more frames, open the plugin, and copy the JSON.
 Output updates as you change your selection.
 
 ## Tags
-design tokens, variables, json, export, developer, design systems, code,
-handoff, dtcg, tokens studio
+json, code, codegen, export, design tokens, developer, design systems,
+compose, flutter, handoff
 
 ## Category
 Development
