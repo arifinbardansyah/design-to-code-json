@@ -3,13 +3,13 @@
 Paste these into the Figma **Publish** modal. Assets are in `assets/`.
 
 ## Name
-Design Extractor
+Design to Code JSON
 
 ## Tagline (≤ ~60 chars)
 Export any selection to JSON — nodes, variables & tokens
 
 ## Description
-Design Extractor turns a Figma selection into one clean JSON document you can
+Design to Code JSON turns a Figma selection into one clean JSON document you can
 feed to codegen, a token pipeline, or an LLM.
 
 It captures:

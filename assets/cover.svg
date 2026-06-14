@@ -9,9 +9,9 @@
 
   <!-- left: copy -->
   <text x="140" y="300" font-family="Helvetica, Arial, sans-serif" font-size="34" font-weight="700" letter-spacing="6" fill="#FFFFFF" fill-opacity="0.75">FIGMA PLUGIN</text>
-  <text x="136" y="424" font-family="Helvetica, Arial, sans-serif" font-size="112" font-weight="700" fill="#FFFFFF">Design Extractor</text>
-  <text x="140" y="520" font-family="Helvetica, Arial, sans-serif" font-size="44" font-weight="400" fill="#FFFFFF" fill-opacity="0.92">Export any selection to structured JSON —</text>
-  <text x="140" y="580" font-family="Helvetica, Arial, sans-serif" font-size="44" font-weight="400" fill="#FFFFFF" fill-opacity="0.92">nodes, variables &amp; W3C design tokens.</text>
+  <text x="136" y="416" font-family="Helvetica, Arial, sans-serif" font-size="86" font-weight="700" fill="#FFFFFF">Design to Code JSON</text>
+  <text x="140" y="520" font-family="Helvetica, Arial, sans-serif" font-size="44" font-weight="400" fill="#FFFFFF" fill-opacity="0.92">Any selection to codegen-ready JSON —</text>
+  <text x="140" y="580" font-family="Helvetica, Arial, sans-serif" font-size="44" font-weight="400" fill="#FFFFFF" fill-opacity="0.92">nodes, colours, text styles &amp; components.</text>
 
   <!-- right: a faux JSON / token card -->
   <g transform="translate(1180,150)">

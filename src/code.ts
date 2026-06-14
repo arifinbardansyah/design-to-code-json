@@ -518,7 +518,7 @@ async function run(forceCatalogRefresh = false): Promise<void> {
   figma.ui.postMessage({ type: 'result', json: JSON.stringify(doc, null, 2), empty: sel.length === 0 });
 }
 
-figma.showUI(__html__, { width: 480, height: 620, title: 'Design Extractor' });
+figma.showUI(__html__, { width: 480, height: 620, title: 'Design to Code JSON' });
 figma.ui.onmessage = async (msg: any) => {
   if (msg.type === 'options') {
     options = { ...options, ...msg.options };

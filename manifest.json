@@ -1,6 +1,6 @@
 {
-  "name": "Design Extractor",
-  "id": "figma-design-extractor",
+  "name": "Design to Code JSON",
+  "id": "design-to-code-json",
   "api": "1.0.0",
   "main": "dist/code.js",
   "ui": "src/ui.html",

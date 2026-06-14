@@ -1,7 +1,7 @@
 {
-  "name": "figma-design-extractor",
+  "name": "design-to-code-json",
   "version": "0.1.0",
-  "description": "Figma plugin: export the selected frame as structured JSON — node tree, variables, and W3C design-tokens — with full bound-variable info.",
+  "description": "Figma plugin: export the selected frame as compact, codegen-ready JSON — node tree, colour/text-style catalogs, and reusable components.",
   "private": true,
   "type": "module",
   "scripts": {

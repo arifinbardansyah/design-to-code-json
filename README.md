@@ -1,4 +1,4 @@
-# Design Extractor (Figma plugin)
+# Design to Code JSON (Figma plugin)
 
 Exports the selected frame(s) as a single structured **JSON** document — a
 compact node tree plus flat reference catalogs for the **colours** and **text
@@ -115,7 +115,7 @@ loading the plugin in Figma.
 1. `npm run check` (produces `dist/code.js`).
 2. Figma desktop → **Plugins → Development → Import plugin from manifest…** →
    pick `manifest.json`.
-3. Select a frame → **Plugins → Development → Design Extractor**.
+3. Select a frame → **Plugins → Development → Design to Code JSON**.
 4. Output updates as you change selection. **Copy JSON**.
 
 Runs entirely offline under your own Figma session. Reading variables is **not
