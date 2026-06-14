@@ -147,13 +147,18 @@ async function buildCatalog(referenced: Set<string>): Promise<RawCatalog> {
 
 // --- options & per-run context ---------------------------------------------
 
+// Output-format version. BUMP THIS whenever the JSON structure changes, so
+// downstream consumers can tell formats apart across refactors. Independent of
+// the plugin's package version.
+const SCHEMA_VERSION = '1.0';
+
 interface Options {
   expandInstances: boolean;
   modes: ModeOption;
   dropIds: boolean;
   dedupe: boolean;
 }
-let options: Options = { expandInstances: false, modes: 'lightDark', dropIds: true, dedupe: false };
+let options: Options = { expandInstances: false, modes: 'lightDark', dropIds: true, dedupe: true };
 
 /** Per-run accumulators (kept off module scope so concurrent runs don't race). */
 interface Ctx {
@@ -508,7 +513,7 @@ async function run(forceCatalogRefresh = false): Promise<void> {
 
   const flat = buildFlatCatalog(catalog, ctx.vars, options.modes);
   const doc = prune({
-    schemaVersion: '1.0',
+    schemaVersion: SCHEMA_VERSION,
     components,
     nodes,
     colors: flat.colors,

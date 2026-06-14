@@ -63,12 +63,18 @@ in the modes you pick.
 
 ### Options (in the plugin panel)
 
-- **Dedupe components** (default off) — extract repeated subtrees into a
+- **Dedupe components** (default on) — extract repeated subtrees into a
   `components` library and rewrite each usage to `{ use, props }` (see below).
-- **Expand instances** (default off) — atoms vs full internals.
-- **Drop ids** (default on) — omit node ids and variable-id hashes; keep names.
-- **Modes** (default Light + Dark) — limit the variable/token dump to
-  `Light + Dark`, `Default only`, or `All` modes.
+- **Expand instances** (default off) — emit a component instance's full
+  internals instead of collapsing it to a `component` reference + captured
+  icon/text. Turn on only when the component isn't in your codebase.
+- **Drop ids** (default on) — omit node ids; keep names.
+- **Modes** (default Light + Dark) — emit `Light + Dark`, `Default only`, or
+  `All` variable modes in `colors` / `dimensions`.
+
+`schemaVersion` is the **output-format version** (currently `1.0`); it bumps
+whenever the JSON structure changes, so consumers can tell formats apart across
+refactors. It's independent of the plugin's package version.
 
 ### Deduplicate components
 

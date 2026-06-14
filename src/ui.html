@@ -37,10 +37,10 @@
       <button class="primary" id="copy">Copy JSON</button>
     </div>
     <div class="opts">
-      <label><input type="checkbox" id="dedupe" /> Dedupe components</label>
-      <label><input type="checkbox" id="expand" /> Expand instances</label>
-      <label><input type="checkbox" id="dropIds" checked /> Drop ids</label>
-      <label>Modes
+      <label title="Extract repeated subtrees into reusable components; fields that differ across uses become props."><input type="checkbox" id="dedupe" checked /> Dedupe components</label>
+      <label title="Walk inside component instances and emit their full internals, instead of collapsing each to a component reference + captured icon/text."><input type="checkbox" id="expand" /> Expand instances</label>
+      <label title="Omit Figma node ids (codegen never needs them)."><input type="checkbox" id="dropIds" checked /> Drop ids</label>
+      <label title="How many variable modes to emit per colour/dimension.">Modes
         <select id="modes">
           <option value="lightDark" selected>Light + Dark</option>
           <option value="default">Default only</option>
