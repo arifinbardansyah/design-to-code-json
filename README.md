@@ -9,8 +9,6 @@ assumptions; built for codegen (Jetpack Compose, Flutter, …) and LLM workflows
 
 ```jsonc
 {
-  "schemaVersion": "1.0",
-
   // 0) Only with "Dedupe components" on: repeated subtrees extracted into
   //    reusable definitions; fields that differ across uses become props.
   //    { "ListItem": { "props": ["title_text"], "node": { ..."{{title_text}}"... } } }
@@ -71,10 +69,6 @@ in the modes you pick.
 - **Drop ids** (default on) — omit node ids; keep names.
 - **Modes** (default Light + Dark) — emit `Light + Dark`, `Default only`, or
   `All` variable modes in `colors` / `dimensions`.
-
-`schemaVersion` is the **output-format version** (currently `1.0`); it bumps
-whenever the JSON structure changes, so consumers can tell formats apart across
-refactors. It's independent of the plugin's package version.
 
 ### Deduplicate components
 
