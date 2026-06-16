@@ -39,9 +39,8 @@ How to use: in Design mode, select one or more frames, open the plugin, and copy
 the JSON. In Dev Mode, select a frame and pick "Design to Code JSON" as the code
 generator. Output updates as you change your selection.
 
-## Tags
-json, code, codegen, components, design systems, compose, flutter, dev mode,
-handoff, llm
+## Tags (max 5)
+codegen, components, flutter, compose, dev mode
 
 ## Category
 Development
