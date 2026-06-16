@@ -5,6 +5,47 @@
   "main": "dist/code.js",
   "ui": "src/ui.html",
   "editorType": ["figma", "dev"],
+  "capabilities": ["codegen"],
+  "codegenLanguages": [{ "label": "JSON", "value": "JSON" }],
+  "codegenPreferences": [
+    {
+      "itemType": "select",
+      "propertyName": "modes",
+      "label": "Variable modes",
+      "options": [
+        { "label": "Light + Dark", "value": "lightDark", "isDefault": true },
+        { "label": "Default only", "value": "default" },
+        { "label": "All modes", "value": "all" }
+      ]
+    },
+    {
+      "itemType": "select",
+      "propertyName": "dedupe",
+      "label": "Dedupe components",
+      "options": [
+        { "label": "On", "value": "on", "isDefault": true },
+        { "label": "Off", "value": "off" }
+      ]
+    },
+    {
+      "itemType": "select",
+      "propertyName": "expandInstances",
+      "label": "Expand instances",
+      "options": [
+        { "label": "Off", "value": "off", "isDefault": true },
+        { "label": "On", "value": "on" }
+      ]
+    },
+    {
+      "itemType": "select",
+      "propertyName": "dropIds",
+      "label": "Drop node ids",
+      "options": [
+        { "label": "On", "value": "on", "isDefault": true },
+        { "label": "Off", "value": "off" }
+      ]
+    }
+  ],
   "documentAccess": "dynamic-page",
   "networkAccess": {
     "allowedDomains": ["none"]

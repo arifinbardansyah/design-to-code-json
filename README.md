@@ -124,6 +124,20 @@ Runs entirely offline under your own Figma session. Reading variables is **not
 plan-gated** — works on the free plan (you just need the file open in the
 editor, i.e. edit access).
 
+## Use in Dev Mode (no edit access needed)
+
+The editor panel above needs **edit access**. If you only have **view access**
+to a file (e.g. a shared work file), use **Dev Mode** instead:
+
+1. Switch the file to **Dev Mode** (top toolbar toggle, or `&m=dev` in the URL).
+2. Select a frame and open the **Inspect** panel.
+3. In the code section, pick **Design to Code JSON** as the generator — the JSON
+   appears inline. Adjust **modes / dedupe / expand instances / drop ids** via
+   the generator's preferences (gear) menu.
+
+Same output as the editor panel; it runs as a Dev Mode *codegen* plugin
+(`capabilities: ["codegen"]`), which Figma allows for inspectors/viewers.
+
 ## Layout
 
 ```

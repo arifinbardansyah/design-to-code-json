@@ -8,6 +8,12 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+### Added
+- **Dev Mode codegen** — the plugin now runs in Dev Mode's Inspect panel and
+  emits the same JSON, so it works for **viewers without edit access** (the
+  editor plugin flow needs editor access). Options (modes, dedupe, expand
+  instances, drop ids) are exposed as native codegen preferences.
+
 ## [0.1.0] — 2026-06-14
 
 First public release — live on

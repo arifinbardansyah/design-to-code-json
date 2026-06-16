@@ -1,9 +1,10 @@
-// Figma plugin main thread. Walks the current selection into a compact,
-// codegen-friendly `nodes` tree and emits reference catalogs: `textStyles`
-// (typography), `variables` (Figma-shaped, name-keyed) and `tokens` (W3C/DTCG).
-// Colours and text styles in `nodes` are emitted as *references* (names) that
-// resolve into those catalogs; raw values appear only when unbound. Output is
-// one JSON document posted to the UI. No design-system coupling.
+// Figma plugin main thread. Walks the selection into a compact, codegen-friendly
+// `nodes` tree and emits reference catalogs: `colors` / `dimensions` (variables,
+// resolved per mode) and `textStyles` (typography). Colours and text styles in
+// `nodes` are emitted as *references* (names) that resolve into those catalogs;
+// raw values appear only when unbound. Output is one JSON document — posted to
+// the UI in the Figma editor, or returned to the Inspect panel in Dev Mode
+// (codegen). No design-system coupling.
 
 import {
   rgbaToHex,
@@ -484,13 +485,8 @@ async function safeSerialize(node: SceneNode, depth: number, ctx: Ctx): Promise<
 
 // --- entry ------------------------------------------------------------------
 
-let runSeq = 0;
-
-async function run(forceCatalogRefresh = false): Promise<void> {
-  const seq = ++runSeq;
-  if (forceCatalogRefresh) localCatalogCache = null;
-
-  const sel = figma.currentPage.selection;
+/** Serialize a set of root nodes into the output JSON document (pretty string). */
+async function buildDocument(sel: readonly SceneNode[]): Promise<string> {
   const ctx: Ctx = { vars: new Set(), textStyles: new Set() };
   let nodes: unknown[] = [];
   for (const node of sel) nodes.push(await safeSerialize(node, 0, ctx));
@@ -504,8 +500,6 @@ async function run(forceCatalogRefresh = false): Promise<void> {
 
   const catalog = await buildCatalog(ctx.vars);
   const textStyles = await buildTextStyles(ctx.textStyles);
-  if (seq !== runSeq) return; // a newer run superseded this one — drop stale result
-
   const flat = buildFlatCatalog(catalog, ctx.vars, options.modes);
   const doc = prune({
     components,
@@ -514,20 +508,55 @@ async function run(forceCatalogRefresh = false): Promise<void> {
     textStyles,
     dimensions: flat.dimensions,
   });
-
-  figma.ui.postMessage({ type: 'result', json: JSON.stringify(doc, null, 2), empty: sel.length === 0 });
+  return JSON.stringify(doc, null, 2);
 }
 
-figma.showUI(__html__, { width: 480, height: 620, title: 'Design to Code JSON' });
-figma.ui.onmessage = async (msg: any) => {
-  if (msg.type === 'options') {
-    options = { ...options, ...msg.options };
-    await run();
-  } else if (msg.type === 'export') {
-    await run(true); // manual Re-read forces a fresh catalog pull
-  } else if (msg.type === 'close') {
-    figma.closePlugin();
-  }
-};
-run();
-figma.on('selectionchange', () => run());
+let runSeq = 0;
+
+/** Editor (Figma/FigJam) flow: serialize the live selection and post to the UI. */
+async function run(forceCatalogRefresh = false): Promise<void> {
+  const seq = ++runSeq;
+  if (forceCatalogRefresh) localCatalogCache = null;
+  const sel = figma.currentPage.selection;
+  const json = await buildDocument(sel);
+  if (seq !== runSeq) return; // a newer run superseded this one — drop stale result
+  figma.ui.postMessage({ type: 'result', json, empty: sel.length === 0 });
+}
+
+/** Map the manifest-declared codegen preferences onto our Options. */
+function optionsFromCodegen(): Options {
+  const s = figma.codegen.preferences.customSettings;
+  const on = (key: string, dflt: boolean) => (s[key] === undefined ? dflt : s[key] === 'on');
+  const modes = s.modes as ModeOption;
+  return {
+    expandInstances: on('expandInstances', false),
+    modes: modes === 'all' || modes === 'default' || modes === 'lightDark' ? modes : 'lightDark',
+    dropIds: on('dropIds', true),
+    dedupe: on('dedupe', true),
+  };
+}
+
+if (figma.mode === 'codegen') {
+  // Dev Mode: emit the JSON into the Inspect panel's code section. Runs for
+  // viewers (no edit access needed), unlike the editor plugin flow.
+  figma.codegen.on('generate', async (event) => {
+    options = optionsFromCodegen();
+    const code = await buildDocument([event.node]);
+    return [{ title: 'Design to Code JSON', code, language: 'JSON' }];
+  });
+} else {
+  // Figma/FigJam editor (or Dev Mode run-as-plugin): interactive UI panel.
+  figma.showUI(__html__, { width: 480, height: 620, title: 'Design to Code JSON' });
+  figma.ui.onmessage = async (msg: any) => {
+    if (msg.type === 'options') {
+      options = { ...options, ...msg.options };
+      await run();
+    } else if (msg.type === 'export') {
+      await run(true); // manual Re-read forces a fresh catalog pull
+    } else if (msg.type === 'close') {
+      figma.closePlugin();
+    }
+  };
+  run();
+  figma.on('selectionchange', () => run());
+}
