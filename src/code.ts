@@ -9,6 +9,7 @@
 import {
   rgbaToHex,
   buildFlatCatalog,
+  type FlatCatalog,
   type ModeOption,
   type RawCatalog,
   type RawCollection,
@@ -132,16 +133,22 @@ async function getLocalCatalog(): Promise<CatalogMaps> {
 }
 
 /**
- * Catalog = cached local enumeration + any variables the selection references
- * (incl. remote/library ones and alias targets). RawVariable objects are
- * immutable, so reusing the cached map values is safe.
+ * Catalog = the variables the selection references (incl. remote/library ones
+ * and alias targets), optionally seeded with the cached full local enumeration.
+ * RawVariable objects are immutable, so reusing the cached map values is safe.
+ *
+ * `includeLocal` is off for Dev Mode codegen: the flat catalog only emits
+ * referenced variables anyway, and enumerating every variable in a large file
+ * blows past codegen's 3-second `generate` timeout. Resolving just the
+ * referenced ids (and their alias targets) is bounded by what the node uses.
  */
-async function buildCatalog(referenced: Set<string>): Promise<RawCatalog> {
-  const local = await getLocalCatalog();
-  const maps: CatalogMaps = {
-    variables: new Map(local.variables),
-    collections: new Map(local.collections),
-  };
+async function buildCatalog(referenced: Set<string>, includeLocal = true): Promise<RawCatalog> {
+  const maps: CatalogMaps = { variables: new Map(), collections: new Map() };
+  if (includeLocal) {
+    const local = await getLocalCatalog();
+    for (const [k, v] of local.variables) maps.variables.set(k, v);
+    for (const [k, v] of local.collections) maps.collections.set(k, v);
+  }
   await resolveInto(maps, referenced);
   return { collections: [...maps.collections.values()], variables: [...maps.variables.values()] };
 }
@@ -485,8 +492,10 @@ async function safeSerialize(node: SceneNode, depth: number, ctx: Ctx): Promise<
 
 // --- entry ------------------------------------------------------------------
 
-/** Serialize a set of root nodes into the output JSON document (pretty string). */
-async function buildDocument(sel: readonly SceneNode[]): Promise<string> {
+/** Serialize a set of root nodes into the output JSON document (pretty string).
+ *  `lean` (Dev Mode codegen) skips the full local-variable enumeration to stay
+ *  within codegen's 3s timeout. */
+async function buildDocument(sel: readonly SceneNode[], lean = false): Promise<string> {
   const ctx: Ctx = { vars: new Set(), textStyles: new Set() };
   let nodes: unknown[] = [];
   for (const node of sel) nodes.push(await safeSerialize(node, 0, ctx));
@@ -498,16 +507,22 @@ async function buildDocument(sel: readonly SceneNode[]): Promise<string> {
     if (Object.keys(synth.components).length) components = synth.components;
   }
 
-  const catalog = await buildCatalog(ctx.vars);
-  const textStyles = await buildTextStyles(ctx.textStyles);
-  const flat = buildFlatCatalog(catalog, ctx.vars, options.modes);
-  const doc = prune({
-    components,
-    nodes,
-    colors: flat.colors,
-    textStyles,
-    dimensions: flat.dimensions,
-  });
+  // The catalogs are best-effort: if variable/style reads fail (e.g. limited
+  // access in Dev Mode), still emit the node tree rather than nothing.
+  let colors: FlatCatalog['colors'];
+  let dimensions: FlatCatalog['dimensions'];
+  let textStyles: Record<string, unknown> | undefined;
+  try {
+    const catalog = await buildCatalog(ctx.vars, !lean);
+    const flat = buildFlatCatalog(catalog, ctx.vars, options.modes);
+    colors = flat.colors;
+    dimensions = flat.dimensions;
+    textStyles = await buildTextStyles(ctx.textStyles);
+  } catch {
+    // catalog unavailable — node tree (with inline hex/fonts) still emits
+  }
+
+  const doc = prune({ components, nodes, colors, textStyles, dimensions });
   return JSON.stringify(doc, null, 2);
 }
 
@@ -541,7 +556,7 @@ if (figma.mode === 'codegen') {
   // viewers (no edit access needed), unlike the editor plugin flow.
   figma.codegen.on('generate', async (event) => {
     options = optionsFromCodegen();
-    const code = await buildDocument([event.node]);
+    const code = await buildDocument([event.node], true); // lean: stay within 3s
     return [{ title: 'Design to Code JSON', code, language: 'JSON' }];
   });
 } else {
