@@ -604,15 +604,19 @@ async function buildDocument(sel: readonly SceneNode[], lean = false): Promise<s
   let nodes: unknown[] = [];
   for (const node of sel) nodes.push(await safeSerialize(node, 0, ctx));
 
+  // Component library (Figma component identity) and dedupe (repeated subtrees)
+  // compose: the former captures real components inline during serialization,
+  // the latter then extracts any remaining repeated frames. Library defs win on
+  // a name clash.
   let components: Record<string, unknown> | undefined;
-  if (options.componentLibrary) {
-    // Definitions are built inline during serialization (instances are emitted
-    // as `{ use, props }`), so just surface what was collected.
-    if (Object.keys(ctx.components).length) components = ctx.components as Record<string, unknown>;
-  } else if (options.dedupe) {
+  const lib = options.componentLibrary ? ctx.components : {};
+  if (options.dedupe) {
     const synth = synthesizeComponents(nodes as any[]);
     nodes = synth.nodes;
-    if (Object.keys(synth.components).length) components = synth.components;
+    const merged = { ...synth.components, ...lib };
+    if (Object.keys(merged).length) components = merged;
+  } else if (Object.keys(lib).length) {
+    components = lib as Record<string, unknown>;
   }
 
   // The catalogs are best-effort: if variable/style reads fail (e.g. limited

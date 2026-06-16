@@ -66,8 +66,10 @@ each container component serialized once into `ctx.components` with `{{prop}}`
 placeholders (from Figma component text-property refs) and instances emitted as
 `{ use, props }`. That path is Figma-coupled (reads `getMainComponentAsync`,
 `componentProperties`, `componentPropertyReferences`), so it's verified in Figma,
-not unit tests; structural dedupe (`synthesizeComponents`, pure + tested) is the
-separate `dedupe` path and is skipped when `componentLibrary` is on.
+not unit tests. It **composes** with structural dedupe (`synthesizeComponents`,
+pure + tested): when both are on, component-library defs are built inline, then
+dedupe extracts remaining repeated frames; the two `components` maps are merged
+(library defs win on name clash).
 
 **Two entry points**, branched on `figma.mode` at the bottom of `code.ts`:
 - **Editor (Figma/FigJam)** — `figma.showUI` + `run()` on the live selection,

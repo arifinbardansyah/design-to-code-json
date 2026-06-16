@@ -69,7 +69,9 @@ in the modes you pick.
   container component is emitted once into `components` (with `{{prop}}`
   placeholders where text is bound to a component text property), and **every
   instance** — even single-use ones — becomes a `{ use, variants, props }`
-  reference. Leaf/icon instances stay atoms. Overrides **Dedupe components**.
+  reference. Leaf/icon instances stay atoms. Composes with **Dedupe
+  components**, which then extracts any remaining repeated *frames* (e.g. list
+  items that aren't Figma components) into the same `components` map.
 - **Expand instances** (default off) — emit a component instance's full
   internals instead of collapsing it to a `component` reference + captured
   icon/text. Turn on only when the component isn't in your codebase.

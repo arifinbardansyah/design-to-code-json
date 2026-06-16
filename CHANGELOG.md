@@ -8,6 +8,15 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-06-16
+
+### Fixed
+- **Component library** now **composes** with **Dedupe components** instead of
+  replacing it. With both on, real Figma components are extracted by identity
+  *and* repeated non-component frames (e.g. list items) are still deduped into
+  the same `components` map. Previously, enabling Component library suppressed
+  dedupe, leaving repeated frames inline.
+
 ## [0.3.0] — 2026-06-16
 
 ### Added
@@ -68,7 +77,8 @@ First public release — live on
 - Runs entirely offline (`networkAccess: none`); reads variables, so it works
   on any Figma plan with editor access.
 
-[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.3.1
 [0.3.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.3.0
 [0.2.2]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.2.2
 [0.2.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.2.1
