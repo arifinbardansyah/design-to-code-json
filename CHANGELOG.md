@@ -8,6 +8,18 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-06-16
+
+### Changed
+- Codegen output now self-reports: the Code section title shows the running
+  build (`Design to Code JSON (vX.Y.Z)`), and a thrown error renders as visible
+  text instead of a blank panel — so one look identifies build vs error vs
+  timeout. Version is injected at build time from `package.json`.
+
+### Fixed
+- Reduced codegen timeout risk on instance-heavy frames: nested instances'
+  main components are now resolved in parallel instead of sequentially.
+
 ## [0.2.1] — 2026-06-16
 
 ### Fixed
@@ -45,7 +57,8 @@ First public release — live on
 - Runs entirely offline (`networkAccess: none`); reads variables, so it works
   on any Figma plan with editor access.
 
-[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.2.2
 [0.2.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.2.1
 [0.2.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.2.0
 [0.1.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.1.0

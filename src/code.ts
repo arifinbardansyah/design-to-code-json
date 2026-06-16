@@ -19,6 +19,9 @@ import {
 } from './transform';
 import { synthesizeComponents } from './components';
 
+// Injected at build time from package.json (see tool/build.mjs).
+declare const __VERSION__: string;
+
 // --- variable reading -------------------------------------------------------
 
 const varCache = new Map<string, Variable | null>();
@@ -400,22 +403,26 @@ async function componentName(node: InstanceNode): Promise<string> {
 /** Scan an instance's subtree for the content worth keeping when we don't
  *  expand it: nested component (icon) names and visible text. */
 async function scanOverrides(node: SceneNode): Promise<Record<string, unknown>> {
-  const components: string[] = [];
+  const instances: InstanceNode[] = [];
   const texts: string[] = [];
-  async function walk(n: any): Promise<void> {
+  // Sync walk to collect work, then resolve main components in parallel — the
+  // sequential await-per-instance version could blow codegen's 3s timeout on
+  // instance-heavy subtrees.
+  function walk(n: any): void {
     for (const c of n.children ?? []) {
       if (c.visible === false) continue;
       if (c.type === 'INSTANCE') {
-        components.push(await componentName(c));
-        await walk(c);
+        instances.push(c);
+        walk(c);
       } else if (c.type === 'TEXT') {
         if (c.characters?.trim()) texts.push(c.characters);
       } else {
-        await walk(c);
+        walk(c);
       }
     }
   }
-  await walk(node);
+  walk(node);
+  const components = await Promise.all(instances.map(componentName));
   const uniq = [...new Set(components)];
   return prune({
     icon: uniq.length === 1 ? uniq[0] : undefined,
@@ -555,9 +562,17 @@ if (figma.mode === 'codegen') {
   // Dev Mode: emit the JSON into the Inspect panel's code section. Runs for
   // viewers (no edit access needed), unlike the editor plugin flow.
   figma.codegen.on('generate', async (event) => {
-    options = optionsFromCodegen();
-    const code = await buildDocument([event.node], true); // lean: stay within 3s
-    return [{ title: 'Design to Code JSON', code, language: 'JSON' }];
+    // Version in the title makes the live build identifiable; the try/catch turns
+    // a thrown error into visible text instead of a blank panel. (A 3s-timeout
+    // failure still renders blank — Figma kills the promise before we return.)
+    const title = `Design to Code JSON (v${__VERSION__})`;
+    try {
+      options = optionsFromCodegen();
+      const code = await buildDocument([event.node], true); // lean: stay within 3s
+      return [{ title, code, language: 'JSON' }];
+    } catch (e) {
+      return [{ title: `${title} — error`, code: String((e as any)?.stack ?? e), language: 'JSON' }];
+    }
   });
 } else {
   // Figma/FigJam editor (or Dev Mode run-as-plugin): interactive UI panel.
