@@ -8,6 +8,8 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-06-16
+
 ### Added
 - **Dev Mode codegen** — the plugin now runs in Dev Mode's Inspect panel and
   emits the same JSON, so it works for **viewers without edit access** (the
@@ -35,5 +37,6 @@ First public release — live on
 - Runs entirely offline (`networkAccess: none`); reads variables, so it works
   on any Figma plan with editor access.
 
-[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.2.0
 [0.1.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.1.0
