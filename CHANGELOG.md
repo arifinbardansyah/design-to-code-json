@@ -8,6 +8,19 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-06-16
+
+### Fixed
+- **Variant value table no longer emits redundant node trees.** Classification of
+  a variant as value-change vs. structural now compares tree **shape** (node type
+  + child arity, ignoring values) instead of the dedupe `signature` — which baked
+  styling values (corner radius, layout, sizing) into its key and so misclassified
+  almost every variant as structural. Value-only variants (Type=corner radius,
+  Size=dimensions, State=fill/opacity) now collapse into compact `variantStyles`
+  deltas; only variants that genuinely change the child tree (e.g. a State that
+  adds a ripple child) remain full `variants` entries. New pure `sameShape` gate,
+  unit-tested in `tool/test_components.mjs`.
+
 ## [0.8.0] — 2026-06-16
 
 ### Added
@@ -139,7 +152,8 @@ First public release — live on
 - Runs entirely offline (`networkAccess: none`); reads variables, so it works
   on any Figma plan with editor access.
 
-[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.8.1
 [0.8.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.8.0
 [0.7.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.7.1
 [0.7.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.7.0

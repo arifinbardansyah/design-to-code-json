@@ -40,6 +40,20 @@ How to use: in Design mode, select one or more frames, open the plugin, and copy
 the JSON. In Dev Mode, select a frame and pick "Design to Code JSON" as the code
 generator. Output updates as you change your selection.
 
+——
+Code version 0.8.1 · changelog:
+github.com/arifinbardansyah/design-to-code-json/blob/main/CHANGELOG.md
+(Figma's own version counter differs; the Dev Mode code section also prints the
+running build as "Design to Code JSON (v0.8.1)".)
+
+## Release notes (this version — code v0.8.1)
+Variant value table: fixed redundant output. Variants that only change values
+(corner radius, size, fill/opacity) now collapse into a compact per-axis
+`variantStyles` table instead of duplicate node trees; only variants that change
+the layer structure (e.g. a state that adds a child) stay as full `variants`
+entries. Update the line above to match each release so this maps to Figma's
+version counter.
+
 ## Tags (max 5)
 codegen, components, design to code, dev mode, llm
 

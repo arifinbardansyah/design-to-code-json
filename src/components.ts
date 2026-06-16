@@ -138,6 +138,20 @@ export interface Component {
   variantStyles?: Record<string, Record<string, Record<string, unknown>>>;
 }
 
+/** Same node *shape* — type + child arity, recursively — ignoring all styling
+ *  values and names. Unlike `signature` (which bakes layout/cornerRadius/etc.
+ *  into the key), this is true iff two trees differ only in values, so it's the
+ *  right gate for "this variant is a value change, not a structural one". */
+export function sameShape(a: Node, b: Node): boolean {
+  if (!a || !b) return a === b;
+  if (a.type !== b.type) return false;
+  const ac: Node[] = a.children ?? [];
+  const bc: Node[] = b.children ?? [];
+  if (ac.length !== bc.length) return false;
+  for (let i = 0; i < ac.length; i++) if (!sameShape(ac[i], bc[i])) return false;
+  return true;
+}
+
 // Fields that are structure/identity, not styling — never part of a value delta.
 const NON_VALUE_FIELDS = new Set([
   'name', 'type', 'children', 'component', 'use', 'variant', 'variants', 'props', '__sig',

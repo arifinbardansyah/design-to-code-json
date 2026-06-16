@@ -108,9 +108,11 @@ The output is opinionated; the only control is variant-splitting:
   ```
 
   It serializes the base + one variant per axis-value (not the full combo
-  product). Variant values that change *structure* become `variants` entries
-  instead of table rows. Heavier — best in the editor panel (not the 3s Dev
-  Mode budget).
+  product). A variant is a table row when it shares the base's tree **shape**
+  (same node types and child counts, values aside); only a variant that changes
+  the shape — adds or removes a child — becomes a full `variants` entry instead.
+  So corner-radius / size / fill / opacity changes stay compact deltas. Heavier —
+  best in the editor panel (not the 3s Dev Mode budget).
 
 ### Deduplicate components
 

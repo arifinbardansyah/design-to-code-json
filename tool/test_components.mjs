@@ -196,5 +196,29 @@ const listItem = (n, title, desc) => ({
   eq('valueDelta: identical -> empty', C.valueDelta(base, JSON.parse(JSON.stringify(base))), {});
 }
 
+// --- sameShape (variant value-vs-structural gate) ---------------------------
+{
+  const base = {
+    name: 'Btn', type: 'COMPONENT', cornerRadius: 100, size: { width: 48, height: 48 },
+    children: [{ name: 'Content', type: 'FRAME', fill: '#fff',
+      children: [{ name: 'Icon', type: 'INSTANCE', size: { width: 24, height: 24 } }] }],
+  };
+  // Same type + arity, only values differ -> value change.
+  const valueOnly = {
+    name: 'Btn', type: 'COMPONENT', cornerRadius: 12, size: { width: 64, height: 64 },
+    children: [{ name: 'Content', type: 'FRAME', fill: '#000',
+      children: [{ name: 'Icon', type: 'INSTANCE', size: { width: 40, height: 40 } }] }],
+  };
+  truthy('sameShape: value-only variant -> true', C.sameShape(base, valueOnly));
+  // Extra child (the Ripple case) -> structural.
+  const structural = JSON.parse(JSON.stringify(base));
+  structural.children[0].children.unshift({ name: 'Ripple', type: 'VECTOR' });
+  truthy('sameShape: added child -> false', C.sameShape(base, structural) === false);
+  // Same arity but a child's type differs -> structural.
+  const retyped = JSON.parse(JSON.stringify(base));
+  retyped.children[0].children[0].type = 'FRAME';
+  truthy('sameShape: differing child type -> false', C.sameShape(base, retyped) === false);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

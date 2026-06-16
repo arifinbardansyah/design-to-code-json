@@ -16,7 +16,7 @@ import {
   type RawVariable,
   type VarType,
 } from './transform';
-import { synthesizeComponents, signature, finalizeVariants, valueDelta, type Component, type VariantStruct } from './components';
+import { synthesizeComponents, signature, sameShape, finalizeVariants, valueDelta, type Component, type VariantStruct } from './components';
 
 // Injected at build time from package.json (see tool/build.mjs).
 declare const __VERSION__: string;
@@ -553,7 +553,6 @@ async function ensureSetDef(set: ComponentSetNode, depth: number, ctx: Ctx): Pro
 
   const base = set.defaultVariant;
   const { node: baseTree, props } = await serializeMain(base, setName, depth, ctx);
-  const baseSig = signature(baseTree as any);
   const baseCombo = base.variantProperties ?? {};
 
   const variants = set.children.filter((c) => c.type === 'COMPONENT') as ComponentNode[];
@@ -575,7 +574,7 @@ async function ensureSetDef(set: ComponentSetNode, depth: number, ctx: Ctx): Pro
       const child = byCombo.get(comboKey({ ...baseCombo, [axis]: val }));
       if (!child) continue; // sparse set — that single-axis swap doesn't exist
       const { node: childTree } = await serializeMain(child, setName, depth, ctx);
-      if (signature(childTree as any) === baseSig) {
+      if (sameShape(baseTree as any, childTree as any)) {
         const delta = valueDelta(baseTree as any, childTree as any);
         if (Object.keys(delta).length) (variantStyles[axis] ??= {})[val] = delta;
       } else {
