@@ -8,6 +8,14 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-06-16
+
+### Fixed
+- **Dev Mode codegen rendered blank** on larger files. The `generate` callback
+  has a hard 3-second timeout, and the catalog step enumerated every variable in
+  the file first. Codegen now resolves only the variables the inspected node
+  references, and the node tree still emits if variable reads fail.
+
 ## [0.2.0] — 2026-06-16
 
 ### Added
@@ -37,6 +45,7 @@ First public release — live on
 - Runs entirely offline (`networkAccess: none`); reads variables, so it works
   on any Figma plan with editor access.
 
-[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.2.1
 [0.2.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.2.0
 [0.1.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.1.0
