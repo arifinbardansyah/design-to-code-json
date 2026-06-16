@@ -17,6 +17,15 @@
         { "label": "Default only", "value": "default" },
         { "label": "All modes", "value": "all" }
       ]
+    },
+    {
+      "itemType": "select",
+      "propertyName": "variants",
+      "label": "Split variants by structure",
+      "options": [
+        { "label": "Off", "value": "off", "isDefault": true },
+        { "label": "On", "value": "on" }
+      ]
     }
   ],
   "documentAccess": "dynamic-page",

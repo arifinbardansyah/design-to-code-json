@@ -42,7 +42,7 @@ function normName(name?: string): string {
 
 /** Structural signature — excludes the concrete values of SLOT_FIELDS but keeps
  *  which of them are present, so structure matches while values may vary. */
-function signature(node: Node): string {
+export function signature(node: Node): string {
   const sig = {
     type: node.type,
     name: normName(node.name),
@@ -130,7 +130,58 @@ function extractProps(inst: Node, slots: Slot[]): Record<string, unknown> {
   return out;
 }
 
-export interface Component { props?: string[]; node: Node; }
+export interface Component { props?: string[]; node?: Node; variants?: Record<string, Component>; }
+
+// --- Figma component variants (built by code.ts, finalized here) -------------
+
+/** One structurally-distinct variant of a component set actually used in the
+ *  selection. `repCombo` is the variant string of its first occurrence. */
+export interface VariantStruct { sig: string; repCombo: string; node: Node; props?: string[]; }
+
+/**
+ * Fold collected variant structures into `components` and resolve the temporary
+ * `__sig` markers on use-refs. A set with one structure stays flat
+ * (`{ node, props }`, no `variant` on its use-refs); a set with several nests
+ * (`{ variants: { repCombo: { node, props } } }`) and each use-ref gains a
+ * `variant: repCombo` pointer. Pure: mutates `components` and the trees in place.
+ */
+export function finalizeVariants(
+  roots: Node[],
+  components: Record<string, Component>,
+  structures: Map<string, VariantStruct[]>,
+): void {
+  // `${set}\n${sig}` -> repCombo (multi-structure) or null (single -> no pointer)
+  const pointer = new Map<string, string | null>();
+  for (const [setName, structs] of structures) {
+    if (structs.length === 1) {
+      const s = structs[0];
+      components[setName] = s.props ? { node: s.node, props: s.props } : { node: s.node };
+      pointer.set(`${setName}\n${s.sig}`, null);
+    } else {
+      const variants: Record<string, Component> = {};
+      for (const s of structs) {
+        variants[s.repCombo] = s.props ? { node: s.node, props: s.props } : { node: s.node };
+        pointer.set(`${setName}\n${s.sig}`, s.repCombo);
+      }
+      components[setName] = { variants };
+    }
+  }
+
+  const rewrite = (node: Node): void => {
+    if (!node || typeof node !== 'object') return;
+    if (typeof node.use === 'string' && node.__sig !== undefined) {
+      const ptr = pointer.get(`${node.use}\n${node.__sig}`);
+      if (ptr) node.variant = ptr;
+      delete node.__sig;
+    }
+    if (Array.isArray(node.children)) node.children.forEach(rewrite);
+  };
+  roots.forEach(rewrite);
+  for (const def of Object.values(components)) {
+    if (def.node) rewrite(def.node);
+    if (def.variants) for (const v of Object.values(def.variants)) if (v.node) rewrite(v.node);
+  }
+}
 
 /** Extract repeated container subtrees into `components`, rewriting each usage
  *  to `{ use, props }`. Returns the rewritten tree + the component library. */

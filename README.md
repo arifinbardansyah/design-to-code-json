@@ -66,9 +66,9 @@ a single mode collapses to a bare value (`"spacing/md": 16`), not `{ mode: 16 }`
   keeps a per-run `segments` array.
 - **Constraints** — only when non-default (e.g. `SCALE` icons).
 
-### Behaviour (fixed) + the one option
+### Behaviour (fixed) + options
 
-The output is opinionated, so there's nothing to configure except variable modes:
+The output is opinionated; only variable modes and variant-splitting are configurable:
 
 - **Component library** (always on) — uses Figma's own component model: each
   container component is emitted once into `components` (with `{{prop}}`
@@ -80,8 +80,17 @@ The output is opinionated, so there's nothing to configure except variable modes
   into the same `components` map, with differing fields as props (see below).
 - **Node ids** are always dropped (codegen never needs them); instances are
   never expanded inline (they resolve via `components`).
-- **Modes** (the only control; default Light + Dark) — emit `Light + Dark`,
-  `Default only`, or `All` variable modes in `colors` / `dimensions`.
+- **Modes** (default Light + Dark) — emit `Light + Dark`, `Default only`, or
+  `All` variable modes in `colors` / `dimensions`.
+- **Split variants** (default off) — for a component **set**, emit one definition
+  per structurally-distinct variant that's used. Value-only variants
+  (colour/size/state) still collapse to a single def; only variants that change
+  the child tree (e.g. `expanded=yes` adding rows) split. A set with one
+  structure stays flat (`components[name] = { node }`); a set with several nests
+  (`components[name] = { variants: { "<combo>": { node } } }`) and each use-ref
+  gains a `variant` pointer. Only variants actually placed are processed.
+  Per-variant *values* (Primary vs Secondary colours) aren't captured — the def
+  reflects one representative variant; the consumer component handles styling.
 
 ### Deduplicate components
 

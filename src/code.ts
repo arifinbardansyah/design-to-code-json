@@ -17,7 +17,7 @@ import {
   type RawVariable,
   type VarType,
 } from './transform';
-import { synthesizeComponents, type Component } from './components';
+import { synthesizeComponents, signature, finalizeVariants, type Component, type VariantStruct } from './components';
 
 // Injected at build time from package.json (see tool/build.mjs).
 declare const __VERSION__: string;
@@ -159,11 +159,13 @@ async function buildCatalog(referenced: Set<string>, includeLocal = true): Promi
 // --- options & per-run context ---------------------------------------------
 
 // Behaviour is fixed (dedupe + component library on, ids dropped, instances not
-// expanded); only the variable-mode selection is configurable.
+// expanded). Configurable: variable-mode selection, and whether to split a
+// component set into one definition per structurally-distinct variant.
 interface Options {
   modes: ModeOption;
+  variants: boolean;
 }
-let options: Options = { modes: 'lightDark' };
+let options: Options = { modes: 'lightDark', variants: false };
 
 /** Per-run accumulators (kept off module scope so concurrent runs don't race). */
 interface Ctx {
@@ -176,6 +178,9 @@ interface Ctx {
   components: Record<string, Component>;
   building: Set<string>;
   propSink: Set<string> | null;
+  // Variant mode: structures-per-set (deduped by signature) + per-main-id sig cache.
+  variantStructures: Map<string, VariantStruct[]>;
+  variantSig: Map<string, string>;
 }
 
 /** Drop keys whose value is `undefined`. */
@@ -468,20 +473,52 @@ function instanceProps(node: InstanceNode): Record<string, unknown> {
   return out;
 }
 
-/** Serialize a main component once into `ctx.components[name]` (cycle-guarded). */
-async function ensureComponentDef(name: string, main: ComponentNode, depth: number, ctx: Ctx): Promise<void> {
-  if (ctx.components[name] || ctx.building.has(name)) return;
-  ctx.building.add(name);
+/** Serialize a main component's tree, collecting its `{{prop}}` names, with the
+ *  root renamed to `displayName` (the component/set name, not the variant string). */
+async function serializeMain(
+  main: ComponentNode,
+  displayName: string,
+  depth: number,
+  ctx: Ctx,
+): Promise<{ node: Record<string, unknown>; props?: string[] }> {
   const prevSink = ctx.propSink;
   const sink = new Set<string>();
   ctx.propSink = sink;
   const node = (await serializeNode(main as unknown as SceneNode, depth, ctx)) as Record<string, unknown>;
-  node.name = name; // use the component/set name, not the raw "A=x, B=y" variant string
+  node.name = displayName;
   ctx.propSink = prevSink;
+  return { node, props: sink.size ? [...sink] : undefined };
+}
+
+/** Serialize a main component once into `ctx.components[name]` (cycle-guarded). */
+async function ensureComponentDef(name: string, main: ComponentNode, depth: number, ctx: Ctx): Promise<void> {
+  if (ctx.components[name] || ctx.building.has(name)) return;
+  ctx.building.add(name);
+  const { node, props } = await serializeMain(main, name, depth, ctx);
   ctx.building.delete(name);
-  const def: Component = { node: node as any };
-  if (sink.size) def.props = [...sink];
-  ctx.components[name] = def;
+  ctx.components[name] = props ? { node: node as any, props } : { node: node as any };
+}
+
+/** Variant mode: serialize the set's main once per main id, deduping structures
+ *  by signature, and return the structure's signature for the use-ref marker. */
+async function variantSigOf(node: InstanceNode, main: ComponentNode, depth: number, ctx: Ctx): Promise<string> {
+  const cached = ctx.variantSig.get(main.id);
+  if (cached !== undefined) return cached;
+  if (ctx.building.has(main.id)) return ''; // cycle — leave unmarked
+  const setName = (main.parent as BaseNode).name;
+  ctx.building.add(main.id);
+  const { node: tree, props } = await serializeMain(main, setName, depth, ctx);
+  ctx.building.delete(main.id);
+  const sig = signature(tree as any);
+  ctx.variantSig.set(main.id, sig);
+  const structs = ctx.variantStructures.get(setName) ?? [];
+  if (!structs.some((s) => s.sig === sig)) {
+    const combo = variantsOf(node);
+    const repCombo = combo ? Object.entries(combo).map(([k, v]) => `${k}=${v}`).join(', ') : setName;
+    structs.push({ sig, repCombo, node: tree as any, props });
+    ctx.variantStructures.set(setName, structs);
+  }
+  return sig;
 }
 
 async function componentName(node: InstanceNode): Promise<string> {
@@ -536,9 +573,17 @@ async function serializeNode(node: SceneNode, depth: number, ctx: Ctx): Promise<
     // `components` definitions; leaf/icon instances stay compact atoms.
     const main = await node.getMainComponentAsync();
     if (main && 'children' in main && isContainerComponent(main)) {
-      await ensureComponentDef(name, main as ComponentNode, depth, ctx);
       const props = instanceProps(node);
-      return prune({ use: name, variants: variantsOf(node), props: Object.keys(props).length ? props : undefined });
+      const propsOut = Object.keys(props).length ? props : undefined;
+      // Variant mode: split a component SET by structure. `__sig` is resolved to
+      // a flat ref or a `variant` pointer by finalizeVariants after the walk.
+      if (options.variants && (main as any).parent?.type === 'COMPONENT_SET') {
+        const setName = (main.parent as BaseNode).name;
+        const sig = await variantSigOf(node, main as ComponentNode, depth, ctx);
+        return prune({ use: setName, __sig: sig, variants: variantsOf(node), props: propsOut });
+      }
+      await ensureComponentDef(name, main as ComponentNode, depth, ctx);
+      return prune({ use: name, variants: variantsOf(node), props: propsOut });
     }
 
     out.component = name;
@@ -605,9 +650,15 @@ async function buildDocument(sel: readonly SceneNode[], lean = false): Promise<s
     components: {},
     building: new Set(),
     propSink: null,
+    variantStructures: new Map(),
+    variantSig: new Map(),
   };
   let nodes: unknown[] = [];
   for (const node of sel) nodes.push(await safeSerialize(node, 0, ctx));
+
+  // Variant mode: fold collected structures into `ctx.components` and resolve
+  // the `__sig` markers on use-refs (must run before dedupe clones any nodes).
+  if (options.variants) finalizeVariants(nodes as any[], ctx.components, ctx.variantStructures);
 
   // Component library (Figma component identity) and dedupe (repeated subtrees)
   // compose: the former captures real components inline during serialization
@@ -655,8 +706,12 @@ async function run(forceCatalogRefresh = false): Promise<void> {
 
 /** Map the manifest-declared codegen preferences onto our Options. */
 function optionsFromCodegen(): Options {
-  const modes = figma.codegen.preferences.customSettings.modes as ModeOption;
-  return { modes: modes === 'all' || modes === 'default' || modes === 'lightDark' ? modes : 'lightDark' };
+  const s = figma.codegen.preferences.customSettings;
+  const modes = s.modes as ModeOption;
+  return {
+    modes: modes === 'all' || modes === 'default' || modes === 'lightDark' ? modes : 'lightDark',
+    variants: s.variants === 'on',
+  };
 }
 
 if (figma.mode === 'codegen') {

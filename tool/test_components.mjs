@@ -120,5 +120,43 @@ const listItem = (n, title, desc) => ({
   truthy('collision disambiguated by ancestor prefix', props.some((p) => /^(leading|trailing)_/.test(p)));
 }
 
+// --- finalizeVariants -------------------------------------------------------
+
+// (a) one structure -> flat def, use-refs keep no `variant`.
+{
+  const roots = [
+    { use: 'Button', __sig: 's1', variants: { Hierarchy: 'Primary' }, props: { label_text: 'Save' } },
+    { use: 'Button', __sig: 's1', variants: { Hierarchy: 'Secondary' } },
+  ];
+  const components = {};
+  const structures = new Map([
+    ['Button', [{ sig: 's1', repCombo: 'Hierarchy=Primary', node: { name: 'Button', type: 'COMPONENT', children: [] }, props: ['label_text'] }]],
+  ]);
+  C.finalizeVariants(roots, components, structures);
+  eq('one structure -> flat def', components.Button, { node: { name: 'Button', type: 'COMPONENT', children: [] }, props: ['label_text'] });
+  truthy('single structure -> no variant pointer', roots[0].variant === undefined && roots[0].__sig === undefined);
+}
+
+// (b) two structures -> nested variants map + `variant` pointers.
+{
+  const roots = [
+    { use: 'Coin', __sig: 'a', variants: { expanded: 'no' } },
+    { use: 'Coin', __sig: 'b', variants: { expanded: 'yes' } },
+  ];
+  const components = {};
+  const structures = new Map([
+    ['Coin', [
+      { sig: 'a', repCombo: 'expanded=no', node: { name: 'Coin', type: 'COMPONENT', children: ['A'] } },
+      { sig: 'b', repCombo: 'expanded=yes', node: { name: 'Coin', type: 'COMPONENT', children: ['A', 'B'] } },
+    ]],
+  ]);
+  C.finalizeVariants(roots, components, structures);
+  truthy('two structures -> nested variants map', components.Coin.variants && components.Coin.node === undefined);
+  truthy('variant keys are repCombos', !!components.Coin.variants['expanded=no'] && !!components.Coin.variants['expanded=yes']);
+  eq('use-ref gets variant pointer (no)', roots[0].variant, 'expanded=no');
+  eq('use-ref gets variant pointer (yes)', roots[1].variant, 'expanded=yes');
+  truthy('__sig stripped', roots[0].__sig === undefined && roots[1].__sig === undefined);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

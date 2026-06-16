@@ -44,6 +44,7 @@
           <option value="all">All</option>
         </select>
       </label>
+      <label title="Split a component set into one definition per structurally-distinct variant (e.g. expanded=yes vs no). Value-only variants (colour/size/state) still share one definition."><input type="checkbox" id="variants" /> Split variants</label>
     </div>
     <div class="hint">
       Select one or more frames — output updates automatically. Exports compact
@@ -61,11 +62,14 @@
 
       const getOptions = () => ({
         modes: document.getElementById('modes').value,
+        variants: document.getElementById('variants').checked,
       });
       const sendOptions = () =>
         parent.postMessage({ pluginMessage: { type: 'options', options: getOptions() } }, '*');
 
-      document.getElementById('modes').addEventListener('change', sendOptions);
+      for (const id of ['modes', 'variants']) {
+        document.getElementById(id).addEventListener('change', sendOptions);
+      }
 
       onmessage = (e) => {
         const msg = e.data.pluginMessage;

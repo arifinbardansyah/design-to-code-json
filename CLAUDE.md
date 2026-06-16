@@ -60,12 +60,16 @@ Core serialization is shared by `buildDocument(sel)` in `code.ts`: walk roots ->
 `buildFlatCatalog` -> one JSON string. Output keys: `components?`, `nodes`,
 `colors?`, `textStyles?`, `dimensions?`.
 
-**Behaviour is fixed** (no toggles): the only configurable option is `modes`.
-In `serializeNode`'s INSTANCE branch, container components are serialized once
-into `ctx.components` with `{{prop}}` placeholders (from Figma component
-text-property refs) and instances emitted as `{ use, props }`; leaf/icon
-instances stay atoms. Node ids are always dropped; instances are never expanded
-inline. That path is Figma-coupled (reads `getMainComponentAsync`,
+**Behaviour is mostly fixed**; the two options are `modes` and `variants`. In
+`serializeNode`'s INSTANCE branch, container components are serialized once into
+`ctx.components` with `{{prop}}` placeholders (from Figma component text-property
+refs) and instances emitted as `{ use, props }`; leaf/icon instances stay atoms.
+Node ids are always dropped; instances are never expanded inline. With `variants`
+on, a component **set** splits by structure: `serializeMain` + `signature()` per
+main id collect distinct structures into `ctx.variantStructures`, use-refs get a
+temporary `__sig`, and the pure `finalizeVariants` (components.ts, unit-tested)
+folds them into `components` (flat for one structure, nested `variants` map for
+several) and resolves the markers. That path is Figma-coupled (reads `getMainComponentAsync`,
 `componentProperties`, `componentPropertyReferences`), so it's verified in Figma,
 not unit tests. It always **composes** with structural dedupe
 (`synthesizeComponents`, pure + tested): library defs built inline, then dedupe

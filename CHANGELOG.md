@@ -8,6 +8,18 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-06-16
+
+### Added
+- **Split variants** option (default off) — for a component set, emit one
+  definition per *structurally-distinct* variant actually used. Value-only
+  variants (Hierarchy/Size/State) still share one def; only variants that change
+  the child tree (e.g. `.Coin expiry info` `expanded`) split. One structure stays
+  flat; multiple nest under `components[name].variants` with a `variant` pointer
+  on each use-ref. Structure detection reuses the dedupe `signature()`; only
+  placed variants are processed (no combinatorial blow-up). Per-variant values
+  aren't captured (the consumer component owns variant styling).
+
 ## [0.5.0] — 2026-06-16
 
 ### Changed
@@ -100,7 +112,8 @@ First public release — live on
 - Runs entirely offline (`networkAccess: none`); reads variables, so it works
   on any Figma plan with editor access.
 
-[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.6.0
 [0.5.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.5.0
 [0.4.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.4.0
 [0.3.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.3.1
