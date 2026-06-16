@@ -77,6 +77,8 @@ release counter — each entry notes the matching Community release where useful
   a Figma *colour style* (not just a variable) now emit the style name and join
   the `colors` catalog. Raw, unbound colours still fall back to hex.
 
+## [0.4.0] — 2026-06-16
+
 ### Changed
 - **Simplified to one option.** Dedupe components, Component library, and Drop
   ids are now always on, and Expand instances is gone (instances always resolve
