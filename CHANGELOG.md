@@ -8,6 +8,13 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-06-16
+
+### Fixed
+- Component use-refs now keep the instance's rendered `size` when it's fixed, so
+  per-instance dimensions (e.g. a `Size` variant of an icon button) are no longer
+  lost when the instance collapses to `{ use, … }`.
+
 ## [0.7.0] — 2026-06-16
 
 ### Changed
@@ -120,7 +127,8 @@ First public release — live on
 - Runs entirely offline (`networkAccess: none`); reads variables, so it works
   on any Figma plan with editor access.
 
-[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.7.1
 [0.7.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.7.0
 [0.6.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.6.0
 [0.5.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.5.0

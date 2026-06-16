@@ -582,15 +582,19 @@ async function serializeNode(node: SceneNode, depth: number, ctx: Ctx): Promise<
     if (main && 'children' in main && isContainerComponent(main)) {
       const props = instanceProps(node);
       const propsOut = Object.keys(props).length ? props : undefined;
+      // A use-ref keeps the instance's rendered size when it's fixed (the def is
+      // shared, so per-instance dimensions — e.g. a Size variant — live here).
+      const fixed = n.layoutSizingHorizontal === 'FIXED' || !('layoutMode' in n) || n.layoutMode === 'NONE';
+      const size = fixed && 'width' in n ? { width: Math.round(n.width), height: Math.round(n.height) } : undefined;
       // Variant mode: split a component SET by structure. `__sig` is resolved to
       // a flat ref or a `variant` pointer by finalizeVariants after the walk.
       if (options.variants && (main as any).parent?.type === 'COMPONENT_SET') {
         const setName = (main.parent as BaseNode).name;
         const sig = await variantSigOf(node, main as ComponentNode, depth, ctx);
-        return prune({ use: setName, __sig: sig, variants: variantsOf(node), props: propsOut });
+        return prune({ use: setName, __sig: sig, variants: variantsOf(node), props: propsOut, size });
       }
       await ensureComponentDef(name, main as ComponentNode, depth, ctx);
-      return prune({ use: name, variants: variantsOf(node), props: propsOut });
+      return prune({ use: name, variants: variantsOf(node), props: propsOut, size });
     }
 
     out.component = name;
