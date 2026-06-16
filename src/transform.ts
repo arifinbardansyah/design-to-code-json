@@ -121,8 +121,9 @@ export function resolveToLiteral(
 // --- flat reference catalog -------------------------------------------------
 
 export interface FlatCatalog {
-  colors?: Record<string, Record<string, string>>;
-  dimensions?: Record<string, Record<string, number>>;
+  // A single mode collapses to a bare value; multiple modes stay keyed by mode.
+  colors?: Record<string, string | Record<string, string>>;
+  dimensions?: Record<string, number | Record<string, number>>;
 }
 
 /**
@@ -138,8 +139,8 @@ export function buildFlatCatalog(
 ): FlatCatalog {
   const varById = indexById(catalog.variables);
   const collById = indexById(catalog.collections);
-  const colors: Record<string, Record<string, string>> = {};
-  const dimensions: Record<string, Record<string, number>> = {};
+  const colors: Record<string, string | Record<string, string>> = {};
+  const dimensions: Record<string, number | Record<string, number>> = {};
 
   for (const v of catalog.variables) {
     if (!referenced.has(v.id)) continue;
@@ -153,10 +154,13 @@ export function buildFlatCatalog(
       const lit = resolveToLiteral(v.valuesByMode[modeId], modeId, varById, collById);
       if (lit !== null && typeof lit !== 'boolean') perMode[modeName[modeId] ?? modeId] = lit;
     }
-    if (!Object.keys(perMode).length) continue;
+    const keys = Object.keys(perMode);
+    if (!keys.length) continue;
+    // A single emitted mode collapses to a bare value (`name: 12` not `{Mode: 12}`).
+    const value = keys.length === 1 ? perMode[keys[0]] : perMode;
 
-    if (v.type === 'COLOR') colors[v.name] = perMode as Record<string, string>;
-    else if (v.type === 'FLOAT') dimensions[v.name] = perMode as Record<string, number>;
+    if (v.type === 'COLOR') colors[v.name] = value as string | Record<string, string>;
+    else if (v.type === 'FLOAT') dimensions[v.name] = value as number | Record<string, number>;
   }
 
   const out: FlatCatalog = {};

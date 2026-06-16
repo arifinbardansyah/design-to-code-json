@@ -13,54 +13,57 @@ bound-variable names preserved. No design-system assumptions; built for codegen
 
 ```jsonc
 {
-  // 0) Only with "Dedupe components" on: repeated subtrees extracted into
-  //    reusable definitions; fields that differ across uses become props.
+  // 0) Reusable components: every Figma component (by identity) plus any
+  //    repeated frames (deduped). Fields that differ across uses become props.
   //    { "ListItem": { "props": ["title_text"], "node": { ..."{{title_text}}"... } } }
   "components": { /* ... */ },
 
-  // 1) The selected tree. Colours and text styles are emitted as *references*
-  //    (names) that resolve into the catalogs below; raw values appear only
-  //    when a property isn't bound to a variable/style. e.g.
+  // 1) The selected tree. Colours, text styles AND spacing/radius are emitted as
+  //    *references* (names) that resolve into the catalogs below; raw values
+  //    appear only when a property isn't bound to a variable/style. e.g.
   //    { "type":"TEXT", "characters":"Section title",
-  //      "textStyle":"M3/headline/small", "color":"#1D1B20" }
-  //    { "type":"FRAME", "fill":"Schemes/Surface", ... }
+  //      "textStyle":"M3/headline/small", "color":"Schemes/OnSurface" }
+  //    { "type":"FRAME", "fill":"Schemes/Surface",
+  //      "layout":{ "gap":"spacing/md" }, "cornerRadius":"radius/lg" }
   "nodes": [ /* ...recursive node objects... */ ],
 
-  // 2) Colour catalog the `fill`/`color` references resolve into: the
-  //    referenced variables only, name -> { mode: value } (aliases resolved).
-  "colors": { "Schemes/Surface": { "Light": "#FEF7FF", "Dark": "#141218" } },
+  // 2) Colour catalog the `fill`/`color` references resolve into (variables and
+  //    colour styles, aliases resolved). A single mode collapses to a bare
+  //    value; multiple modes stay keyed by mode.
+  "colors": { "Schemes/Surface": { "Light": "#FEF7FF", "Dark": "#141218" },
+              "brand/primary": "#6D12B5" },
 
   // 3) Typography catalog the `textStyle` references resolve into.
   "textStyles": { "M3/headline/small": { "family":"Roboto", "size":24, "lineHeight":32 } },
 
-  // 4) Same shape as `colors`, for FLOAT (spacing/radius) variables, when any
-  //    dimension is bound to a variable.
-  "dimensions": { "spacing/md": { "Light": 16 } }
+  // 4) Same idea for FLOAT (spacing/radius) variables the `gap`/`padding`/
+  //    `cornerRadius` references resolve into. Single mode -> bare number.
+  "dimensions": { "spacing/md": 16 }
 }
 ```
 
 The output is **compacted for codegen**: default/zero values are omitted,
-spacing collapses to a bare number (or `{value, variable}` when bound), and
-**colours / text styles are references** resolved once in flat catalogs
-(`colors`, `textStyles`, `dimensions`) — limited to what the selection uses,
-in the modes you pick.
+**colours, text styles and spacing/radius are references** (variable or style
+names) resolved once in flat catalogs (`colors`, `textStyles`, `dimensions`) —
+limited to what the selection uses, in the modes you pick. A catalog entry with
+a single mode collapses to a bare value (`"spacing/md": 16`), not `{ mode: 16 }`.
 
 ### What each node carries
 
-- **Component identity** — `component` name + `variants`. Instances are emitted
-  as **atoms**: their internals aren't expanded; instead the captured `icon`
-  (or `components`) and `text` overrides are surfaced. Turn on **Expand
-  instances** to walk inside them.
+- **Component identity** — container components become `{ use, variants, props }`
+  references into the `components` library; leaf/icon instances stay compact
+  **atoms** (`component` name + captured `icon`/`text`).
 - **Layout** (auto-layout) — `mode` (row/column), `gap`, `padding`, axis
-  alignment (only when non-default), `sizing` (HUG/FILL/FIXED); each spacing
-  value carries its bound `variable` when set.
-- **Style** — `fill`/`stroke` as a colour reference (variable name) or hex when
-  unbound; multiple/gradient/image fills use a `fills`/`strokes` array.
-  Plus `strokeWeight`, `cornerRadius`, `effects`, `opacity`.
+  alignment (only when non-default), `sizing` (HUG/FILL/FIXED). Spacing values
+  are a `dimensions` **reference** (variable name) when bound, else a bare number.
+- **Style** — `fill`/`stroke` as a colour reference (variable **or** colour-style
+  name) or hex when unbound; multiple/gradient/image fills use a `fills`/`strokes`
+  array. Plus `strokeWeight`, `cornerRadius` (also a `dimensions` reference when
+  bound), `effects`, `opacity`.
 - **Text** — `characters`, a `textStyle` reference (font defined once in
-  `textStyles`), and `color` (a variable reference or hex). Ad-hoc text with no
-  bound style inlines a `font` object instead. Genuinely mixed text keeps a
-  per-run `segments` array.
+  `textStyles`), and `color` (a variable/colour-style reference or hex). Ad-hoc
+  text with no bound style inlines a `font` object instead. Genuinely mixed text
+  keeps a per-run `segments` array.
 - **Constraints** — only when non-default (e.g. `SCALE` icons).
 
 ### Behaviour (fixed) + the one option

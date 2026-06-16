@@ -85,7 +85,8 @@ eq('dimensions: FLOAT vars as numbers', flat.dimensions, { 'radius/md': { Light:
 truthy('primitive (unreferenced) excluded', flat.colors['color/primitive/green/500'] === undefined);
 
 const flatDefault = T.buildFlatCatalog(catalog, referenced, 'default');
-eq('default mode -> single value', flatDefault.colors['color/bg/primary/bold'], { Light: '#11AC4A' });
+eq('single mode collapses to bare value (color)', flatDefault.colors['color/bg/primary/bold'], '#11AC4A');
+eq('single mode collapses to bare value (dimension)', flatDefault.dimensions['radius/md'], 12);
 
 const flatAll = T.buildFlatCatalog(catalog, referenced, 'all');
 eq('all modes incl Brand', flatAll.colors['color/bg/primary/bold'], { Light: '#11AC4A', Dark: '#1CCB5C', Brand: '#FF0000' });

@@ -169,6 +169,7 @@ let options: Options = { modes: 'lightDark' };
 interface Ctx {
   vars: Set<string>; // bound variable ids referenced by the selection
   textStyles: Set<string>; // text style ids referenced by the selection
+  colorStyles: Record<string, string>; // colour-style name -> hex (for the `colors` catalog)
   // Component-library mode: each Figma component serialized once into `components`
   // (instances become `{ use, props }`). `building` guards cycles; `propSink`
   // collects the prop names of the component currently being defined.
@@ -202,21 +203,32 @@ function paintBound(node: any, field: 'fills' | 'strokes', index: number): Varia
   return Array.isArray(arr) && isAlias(arr[index]) ? arr[index] : undefined;
 }
 
-/** A dimension: a bare number, `{value, variable}` when bound, or undefined
- *  when zero and unbound. */
+/** A dimension: the variable-name reference when bound (value resolved in the
+ *  `dimensions` catalog), a bare number when unbound, or undefined when zero. */
 async function dim(px: number, alias: VariableAlias | undefined, ctx: Ctx): Promise<unknown> {
   const variable = await boundVarName(alias, ctx);
-  if (variable) return { value: px, variable };
+  if (variable) return variable;
   return px ? px : undefined;
 }
 
-// --- colour: a variable-name reference when bound, else a hex literal -------
+// --- colour: a token reference (variable or style name) when bound, else hex --
 
-async function colorOf(paint: any, alias: VariableAlias | undefined, ctx: Ctx): Promise<string | undefined> {
+async function colorOf(
+  paint: any,
+  alias: VariableAlias | undefined,
+  ctx: Ctx,
+  styleName?: string,
+): Promise<string | undefined> {
   const name = await boundVarName(alias, ctx);
-  if (name) return name;
+  if (name) return name; // bound variable -> reference into `colors`
   if (paint?.type === 'SOLID') {
-    return rgbaToHex({ r: paint.color.r, g: paint.color.g, b: paint.color.b, a: paint.opacity ?? 1 });
+    const hex = rgbaToHex({ r: paint.color.r, g: paint.color.g, b: paint.color.b, a: paint.opacity ?? 1 });
+    if (styleName) {
+      // bound to a colour *style* -> emit the style name + record its value
+      ctx.colorStyles[styleName] = hex;
+      return styleName;
+    }
+    return hex;
   }
   return undefined;
 }
@@ -226,6 +238,8 @@ async function colorOf(paint: any, alias: VariableAlias | undefined, ctx: Ctx): 
 async function serializePaints(node: any, field: 'fills' | 'strokes', ctx: Ctx): Promise<{ one?: string; many?: unknown[] }> {
   const paints = node[field];
   if (!paints || paints === figma.mixed || !Array.isArray(paints) || !paints.length) return {};
+  const styleId = node[field === 'fills' ? 'fillStyleId' : 'strokeStyleId'];
+  const styleName = typeof styleId === 'string' && styleId ? await styleNameOf(styleId) : undefined;
   const entries: unknown[] = [];
   let solo: string | undefined;
   let onlySolid = true;
@@ -233,7 +247,7 @@ async function serializePaints(node: any, field: 'fills' | 'strokes', ctx: Ctx):
     const p = paints[i];
     if (p.visible === false) continue;
     if (p.type === 'SOLID') {
-      const c = await colorOf(p, paintBound(node, field, i), ctx);
+      const c = await colorOf(p, paintBound(node, field, i), ctx, styleName);
       entries.push({ color: c });
       solo = c;
     } else if (p.type.startsWith('GRADIENT')) {
@@ -345,7 +359,7 @@ async function compactText(node: TextNode, ctx: Ctx): Promise<Record<string, unk
   if (styleName && typeof styleId === 'string') ctx.textStyles.add(styleId);
 
   const segs = node.getStyledTextSegments([
-    'fontName', 'fontSize', 'fills', 'textStyleId',
+    'fontName', 'fontSize', 'fills', 'fillStyleId', 'textStyleId',
     'textDecoration', 'letterSpacing', 'lineHeight', 'boundVariables',
   ] as any);
 
@@ -356,8 +370,15 @@ async function compactText(node: TextNode, ctx: Ctx): Promise<Record<string, unk
       })
     : undefined;
 
-  const segColor = (s: any) =>
-    colorOf(Array.isArray(s.fills) ? s.fills[0] : undefined, isAlias(s.boundVariables?.fills?.[0]) ? s.boundVariables.fills[0] : undefined, ctx);
+  const segColor = async (s: any) => {
+    const styleName = typeof s.fillStyleId === 'string' && s.fillStyleId ? await styleNameOf(s.fillStyleId) : undefined;
+    return colorOf(
+      Array.isArray(s.fills) ? s.fills[0] : undefined,
+      isAlias(s.boundVariables?.fills?.[0]) ? s.boundVariables.fills[0] : undefined,
+      ctx,
+      styleName,
+    );
+  };
 
   // When this text is bound to a component TEXT property (while a component
   // definition is being built), emit a `{{prop}}` placeholder and record it.
@@ -455,6 +476,7 @@ async function ensureComponentDef(name: string, main: ComponentNode, depth: numb
   const sink = new Set<string>();
   ctx.propSink = sink;
   const node = (await serializeNode(main as unknown as SceneNode, depth, ctx)) as Record<string, unknown>;
+  node.name = name; // use the component/set name, not the raw "A=x, B=y" variant string
   ctx.propSink = prevSink;
   ctx.building.delete(name);
   const def: Component = { node: node as any };
@@ -579,6 +601,7 @@ async function buildDocument(sel: readonly SceneNode[], lean = false): Promise<s
   const ctx: Ctx = {
     vars: new Set(),
     textStyles: new Set(),
+    colorStyles: {},
     components: {},
     building: new Set(),
     propSink: null,
@@ -598,15 +621,18 @@ async function buildDocument(sel: readonly SceneNode[], lean = false): Promise<s
 
   // The catalogs are best-effort: if variable/style reads fail (e.g. limited
   // access in Dev Mode), still emit the node tree rather than nothing.
-  let colors: FlatCatalog['colors'];
+  // Colour styles are collected during serialization, so they stand even if the
+  // variable catalog read fails below; variable colours merge in on top.
+  let colors: FlatCatalog['colors'] = Object.keys(ctx.colorStyles).length ? { ...ctx.colorStyles } : undefined;
   let dimensions: FlatCatalog['dimensions'];
   let textStyles: Record<string, unknown> | undefined;
   try {
     const catalog = await buildCatalog(ctx.vars, !lean);
     const flat = buildFlatCatalog(catalog, ctx.vars, options.modes);
-    colors = flat.colors;
     dimensions = flat.dimensions;
     textStyles = await buildTextStyles(ctx.textStyles);
+    const colorMap = { ...ctx.colorStyles, ...(flat.colors ?? {}) };
+    colors = Object.keys(colorMap).length ? colorMap : undefined;
   } catch {
     // catalog unavailable — node tree (with inline hex/fonts) still emits
   }

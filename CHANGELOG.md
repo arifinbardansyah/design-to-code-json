@@ -8,7 +8,22 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
-## [0.4.0] — 2026-06-16
+## [0.5.0] — 2026-06-16
+
+### Changed
+- **Spacing/radius are now references.** `gap`, `padding`, and `cornerRadius`
+  bound to a variable emit the variable *name* (resolved in `dimensions`),
+  matching how colours/text styles work — instead of `{ value, variable }`.
+- **Single-mode catalog entries collapse to a bare value** — `"spacing/md": 16`
+  and `"brand/primary": "#6D12B5"` instead of `{ "Mode 1": 16 }`. Multi-mode
+  entries (e.g. Light + Dark) still keep the per-mode object.
+- **Component definition names are clean** — a component def is named after the
+  component/set (e.g. `Link`), not the raw `Hierarchy=Primary, Size=md…` string.
+
+### Added
+- **Colour styles resolve to tokens.** `fill` / `stroke` / text `color` bound to
+  a Figma *colour style* (not just a variable) now emit the style name and join
+  the `colors` catalog. Raw, unbound colours still fall back to hex.
 
 ### Changed
 - **Simplified to one option.** Dedupe components, Component library, and Drop
@@ -85,7 +100,8 @@ First public release — live on
 - Runs entirely offline (`networkAccess: none`); reads variables, so it works
   on any Figma plan with editor access.
 
-[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.5.0
 [0.4.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.4.0
 [0.3.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.3.1
 [0.3.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.3.0
