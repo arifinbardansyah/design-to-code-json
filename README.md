@@ -2,10 +2,12 @@
 
 **▶ Install from Figma Community:** https://www.figma.com/community/plugin/1647834863384185949
 
-Exports the selected frame(s) as a single structured **JSON** document — a
-compact node tree plus flat reference catalogs for the **colours** and **text
-styles** it uses, with bound-variable names preserved. No design-system
-assumptions; built for codegen (Jetpack Compose, Flutter, …) and LLM workflows.
+Exports the selected frame(s) as a single **component-aware** JSON document — a
+reusable `components` library (every Figma component as a `{ use, props }`
+definition, repeated frames deduped in too) plus a compact node tree and flat
+reference catalogs for the **colours** and **text styles** used, with
+bound-variable names preserved. No design-system assumptions; built for codegen
+(Jetpack Compose, Flutter, …) and LLM workflows. Runs in Design **and** Dev Mode.
 
 ## Output
 
