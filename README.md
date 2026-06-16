@@ -91,8 +91,26 @@ The output is opinionated; the only control is variant-splitting:
   structure stays flat (`components[name] = { node }`); a set with several nests
   (`components[name] = { variants: { "<combo>": { node } } }`) and each use-ref
   gains a `variant` pointer. Only variants actually placed are processed.
-  Per-variant *values* (Primary vs Secondary colours) aren't captured — the def
-  reflects one representative variant; the consumer component handles styling.
+- **Variant value table** (default off; implies Split variants) — for a
+  component set, read the **whole set** from the design and emit the default
+  variant as the base `node` plus a per-axis `variantStyles` table of the
+  styling each variant value changes (vs. base), so per-variant values come from
+  the design rather than the consumer's code:
+
+  ```jsonc
+  "Icon button - standard": {
+    "node": { /* default variant, base values */ },
+    "variantStyles": {
+      "Size":  { "Large": { "size": 64, "Content > Icon: size": 32 } },
+      "State": { "Disabled": { "Content > State-layer: fill": "#E0E0E0" } }
+    }
+  }
+  ```
+
+  It serializes the base + one variant per axis-value (not the full combo
+  product). Variant values that change *structure* become `variants` entries
+  instead of table rows. Heavier — best in the editor panel (not the 3s Dev
+  Mode budget).
 
 ### Deduplicate components
 

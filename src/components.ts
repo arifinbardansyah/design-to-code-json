@@ -130,7 +130,45 @@ function extractProps(inst: Node, slots: Slot[]): Record<string, unknown> {
   return out;
 }
 
-export interface Component { props?: string[]; node?: Node; variants?: Record<string, Component>; }
+export interface Component {
+  props?: string[];
+  node?: Node;
+  variants?: Record<string, Component>;
+  /** Variant-table mode: per axis, per value, the styling fields that differ from base. */
+  variantStyles?: Record<string, Record<string, Record<string, unknown>>>;
+}
+
+// Fields that are structure/identity, not styling — never part of a value delta.
+const NON_VALUE_FIELDS = new Set([
+  'name', 'type', 'children', 'component', 'use', 'variant', 'variants', 'props', '__sig',
+]);
+
+/**
+ * Diff two **structurally-identical** serialized trees (a component set's base
+ * variant vs. one variant) into a flat map of changed styling fields keyed by a
+ * readable node path, e.g. `{ "Content > State-layer: fill": "#E0E0E0" }`. The
+ * caller must ensure the trees share a `signature` (children align by index).
+ */
+export function valueDelta(base: Node, variant: Node): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const walk = (b: Node, v: Node, path: string): void => {
+    if (!b || !v) return;
+    for (const key of new Set([...Object.keys(b), ...Object.keys(v)])) {
+      if (NON_VALUE_FIELDS.has(key)) continue;
+      if (JSON.stringify(b[key]) !== JSON.stringify(v[key])) {
+        out[path ? `${path}: ${key}` : key] = v[key];
+      }
+    }
+    const bc: Node[] = b.children ?? [];
+    const vc: Node[] = v.children ?? [];
+    for (let i = 0; i < Math.min(bc.length, vc.length); i++) {
+      const childName = vc[i]?.name ?? bc[i]?.name ?? `[${i}]`;
+      walk(bc[i], vc[i], path ? `${path} > ${childName}` : childName);
+    }
+  };
+  walk(base, variant, '');
+  return out;
+}
 
 // --- Figma component variants (built by code.ts, finalized here) -------------
 

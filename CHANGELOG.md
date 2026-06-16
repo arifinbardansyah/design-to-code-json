@@ -8,6 +8,18 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-06-16
+
+### Added
+- **Variant value table** option (default off) — for a component set, reads the
+  whole set from the design and emits the default variant as the base `node`
+  plus a per-axis `variantStyles` table of the styling each variant value
+  changes vs. base (`{ Size: { Large: { size: 64, … } } }`). Per-variant values
+  now come from the design instead of being left to the consumer's code.
+  Serializes the base + one variant per axis-value (not the combo product);
+  values that change *structure* become `variants` entries. Diff is the pure,
+  unit-tested `valueDelta`; heavier, so editor-panel oriented.
+
 ## [0.7.1] — 2026-06-16
 
 ### Fixed
@@ -127,7 +139,8 @@ First public release — live on
 - Runs entirely offline (`networkAccess: none`); reads variables, so it works
   on any Figma plan with editor access.
 
-[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.8.0
 [0.7.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.7.1
 [0.7.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.7.0
 [0.6.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.6.0

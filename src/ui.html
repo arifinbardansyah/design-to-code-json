@@ -38,6 +38,7 @@
     </div>
     <div class="opts">
       <label title="Split a component set into one definition per structurally-distinct variant (e.g. expanded=yes vs no). Value-only variants (colour/size/state) still share one definition."><input type="checkbox" id="variants" /> Split variants</label>
+      <label title="Emit a per-axis value table for component sets: the default variant as the base, plus how each variant value (Size, State, …) changes styling — read from the whole set in the design. Implies Split variants."><input type="checkbox" id="variantTable" /> Variant value table</label>
     </div>
     <div class="hint">
       Select one or more frames — output updates automatically. Exports compact
@@ -55,11 +56,14 @@
 
       const getOptions = () => ({
         variants: document.getElementById('variants').checked,
+        variantTable: document.getElementById('variantTable').checked,
       });
       const sendOptions = () =>
         parent.postMessage({ pluginMessage: { type: 'options', options: getOptions() } }, '*');
 
-      document.getElementById('variants').addEventListener('change', sendOptions);
+      for (const id of ['variants', 'variantTable']) {
+        document.getElementById(id).addEventListener('change', sendOptions);
+      }
 
       onmessage = (e) => {
         const msg = e.data.pluginMessage;

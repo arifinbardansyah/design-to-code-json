@@ -177,5 +177,24 @@ const listItem = (n, title, desc) => ({
   eq('second use-ref -> Card #2', roots[1].variant, 'Card #2');
 }
 
+// --- valueDelta (variant value table) ---------------------------------------
+{
+  const base = {
+    name: 'Btn', type: 'COMPONENT', size: { width: 48, height: 48 },
+    children: [{ name: 'Content', type: 'FRAME', cornerRadius: 100,
+      children: [{ name: 'Icon', type: 'INSTANCE', component: 'x', size: { width: 24, height: 24 } }] }],
+  };
+  const variant = {
+    name: 'Btn', type: 'COMPONENT', size: { width: 64, height: 64 },
+    children: [{ name: 'Content', type: 'FRAME', cornerRadius: 100,
+      children: [{ name: 'Icon', type: 'INSTANCE', component: 'x', size: { width: 32, height: 32 } }] }],
+  };
+  const d = C.valueDelta(base, variant);
+  eq('valueDelta: root field keyed by name', d['size'], { width: 64, height: 64 });
+  eq('valueDelta: nested field keyed by path', d['Content > Icon: size'], { width: 32, height: 32 });
+  truthy('valueDelta: unchanged field omitted', d['Content: cornerRadius'] === undefined);
+  eq('valueDelta: identical -> empty', C.valueDelta(base, JSON.parse(JSON.stringify(base))), {});
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

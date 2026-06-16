@@ -16,7 +16,7 @@ import {
   type RawVariable,
   type VarType,
 } from './transform';
-import { synthesizeComponents, signature, finalizeVariants, type Component, type VariantStruct } from './components';
+import { synthesizeComponents, signature, finalizeVariants, valueDelta, type Component, type VariantStruct } from './components';
 
 // Injected at build time from package.json (see tool/build.mjs).
 declare const __VERSION__: string;
@@ -158,12 +158,15 @@ async function buildCatalog(referenced: Set<string>, includeLocal = true): Promi
 // --- options & per-run context ---------------------------------------------
 
 // Behaviour is fixed (dedupe + component library on, ids dropped, instances not
-// expanded, all variable modes emitted). The one option is whether to split a
-// component set into one definition per structurally-distinct variant.
+// expanded, all variable modes emitted). Options:
+// - variants: split a set into one def per structurally-distinct variant used.
+// - variantTable: also emit a per-axis value table from the whole set (implies
+//   the variant split; supersedes `variants` for sets).
 interface Options {
   variants: boolean;
+  variantTable: boolean;
 }
-let options: Options = { variants: false };
+let options: Options = { variants: false, variantTable: false };
 
 /** Per-run accumulators (kept off module scope so concurrent runs don't race). */
 interface Ctx {
@@ -179,6 +182,9 @@ interface Ctx {
   // Variant mode: structures-per-set (deduped by signature) + per-main-id sig cache.
   variantStructures: Map<string, VariantStruct[]>;
   variantSig: Map<string, string>;
+  // Variant-table mode: per set, the "axis=value" combos that change structure
+  // (so a use-ref can point at the matching structural variant).
+  variantStructuralKeys: Map<string, Set<string>>;
 }
 
 /** Drop keys whose value is `undefined`. */
@@ -528,6 +534,77 @@ async function variantSigOf(node: InstanceNode, main: ComponentNode, depth: numb
   return sig;
 }
 
+/** Stable key for a variant combo (`{Size:"sm",Type:"Round"}` -> "Size=sm,Type=Round"). */
+function comboKey(vp: Record<string, string> | null): string {
+  if (!vp) return '';
+  return Object.keys(vp).sort().map((k) => `${k}=${vp[k]}`).join(',');
+}
+
+/**
+ * Variant-table mode: build a set's def once — the default variant as the base
+ * `node`, a per-axis `variantStyles` table of value deltas (from variants that
+ * keep the base structure), and `variants` entries for axis values that change
+ * structure. Reads the whole set from the design, so values aren't hard-coded.
+ */
+async function ensureSetDef(set: ComponentSetNode, depth: number, ctx: Ctx): Promise<void> {
+  const setName = set.name;
+  if (ctx.components[setName] || ctx.building.has(setName)) return;
+  ctx.building.add(setName);
+
+  const base = set.defaultVariant;
+  const { node: baseTree, props } = await serializeMain(base, setName, depth, ctx);
+  const baseSig = signature(baseTree as any);
+  const baseCombo = base.variantProperties ?? {};
+
+  const variants = set.children.filter((c) => c.type === 'COMPONENT') as ComponentNode[];
+  const byCombo = new Map<string, ComponentNode>();
+  for (const c of variants) byCombo.set(comboKey(c.variantProperties), c);
+
+  const variantStyles: Record<string, Record<string, Record<string, unknown>>> = {};
+  const structural: Record<string, Component> = {};
+  const structuralKeys = new Set<string>();
+
+  for (const [axis, baseVal] of Object.entries(baseCombo)) {
+    const values = new Set<string>();
+    for (const c of variants) {
+      const v = c.variantProperties?.[axis];
+      if (v !== undefined) values.add(v);
+    }
+    for (const val of values) {
+      if (val === baseVal) continue;
+      const child = byCombo.get(comboKey({ ...baseCombo, [axis]: val }));
+      if (!child) continue; // sparse set — that single-axis swap doesn't exist
+      const { node: childTree } = await serializeMain(child, setName, depth, ctx);
+      if (signature(childTree as any) === baseSig) {
+        const delta = valueDelta(baseTree as any, childTree as any);
+        if (Object.keys(delta).length) (variantStyles[axis] ??= {})[val] = delta;
+      } else {
+        structural[`${axis}=${val}`] = { node: childTree as any };
+        structuralKeys.add(`${axis}=${val}`);
+      }
+    }
+  }
+
+  ctx.building.delete(setName);
+  const def: Component = { node: baseTree as any };
+  if (props) def.props = props;
+  if (Object.keys(variantStyles).length) def.variantStyles = variantStyles;
+  if (Object.keys(structural).length) def.variants = structural;
+  ctx.components[setName] = def;
+  ctx.variantStructuralKeys.set(setName, structuralKeys);
+}
+
+/** When a use's variant combo includes a structure-changing axis value, return
+ *  that `"axis=value"` so the use-ref can point at the structural variant. */
+function structuralPointer(node: InstanceNode, setName: string, ctx: Ctx): string | undefined {
+  const keys = ctx.variantStructuralKeys.get(setName);
+  if (!keys) return undefined;
+  for (const [k, v] of Object.entries(variantsOf(node) ?? {})) {
+    if (keys.has(`${k}=${v}`)) return `${k}=${v}`;
+  }
+  return undefined;
+}
+
 async function componentName(node: InstanceNode): Promise<string> {
   const main = await node.getMainComponentAsync();
   if (main?.parent?.type === 'COMPONENT_SET') return main.parent.name;
@@ -586,9 +663,19 @@ async function serializeNode(node: SceneNode, depth: number, ctx: Ctx): Promise<
       // shared, so per-instance dimensions — e.g. a Size variant — live here).
       const fixed = n.layoutSizingHorizontal === 'FIXED' || !('layoutMode' in n) || n.layoutMode === 'NONE';
       const size = fixed && 'width' in n ? { width: Math.round(n.width), height: Math.round(n.height) } : undefined;
+      const inSet = (main as any).parent?.type === 'COMPONENT_SET';
+      // Variant-table mode: build the whole set once (base + value table + any
+      // structural variants); the use-ref points at a structural variant if its
+      // combo selects one.
+      if (options.variantTable && inSet) {
+        const set = main.parent as ComponentSetNode;
+        await ensureSetDef(set, depth, ctx);
+        const variant = structuralPointer(node, set.name, ctx);
+        return prune({ use: set.name, variant, variants: variantsOf(node), props: propsOut, size });
+      }
       // Variant mode: split a component SET by structure. `__sig` is resolved to
       // a flat ref or a `variant` pointer by finalizeVariants after the walk.
-      if (options.variants && (main as any).parent?.type === 'COMPONENT_SET') {
+      if (options.variants && inSet) {
         const setName = (main.parent as BaseNode).name;
         const sig = await variantSigOf(node, main as ComponentNode, depth, ctx);
         return prune({ use: setName, __sig: sig, variants: variantsOf(node), props: propsOut, size });
@@ -663,13 +750,14 @@ async function buildDocument(sel: readonly SceneNode[], lean = false): Promise<s
     propSink: null,
     variantStructures: new Map(),
     variantSig: new Map(),
+    variantStructuralKeys: new Map(),
   };
   let nodes: unknown[] = [];
   for (const node of sel) nodes.push(await safeSerialize(node, 0, ctx));
 
   // Variant mode: fold collected structures into `ctx.components` and resolve
   // the `__sig` markers on use-refs (must run before dedupe clones any nodes).
-  if (options.variants) finalizeVariants(nodes as any[], ctx.components, ctx.variantStructures);
+  if (ctx.variantStructures.size) finalizeVariants(nodes as any[], ctx.components, ctx.variantStructures);
 
   // Component library (Figma component identity) and dedupe (repeated subtrees)
   // compose: the former captures real components inline during serialization
@@ -717,7 +805,8 @@ async function run(forceCatalogRefresh = false): Promise<void> {
 
 /** Map the manifest-declared codegen preferences onto our Options. */
 function optionsFromCodegen(): Options {
-  return { variants: figma.codegen.preferences.customSettings.variants === 'on' };
+  const s = figma.codegen.preferences.customSettings;
+  return { variants: s.variants === 'on', variantTable: s.variantTable === 'on' };
 }
 
 if (figma.mode === 'codegen') {

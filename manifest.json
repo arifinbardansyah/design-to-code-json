@@ -16,6 +16,15 @@
         { "label": "Off", "value": "off", "isDefault": true },
         { "label": "On", "value": "on" }
       ]
+    },
+    {
+      "itemType": "select",
+      "propertyName": "variantTable",
+      "label": "Variant value table",
+      "options": [
+        { "label": "Off", "value": "off", "isDefault": true },
+        { "label": "On", "value": "on" }
+      ]
     }
   ],
   "documentAccess": "dynamic-page",
