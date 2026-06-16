@@ -33,14 +33,15 @@ It's built around your components:
 
 Runs in **Design mode** and in **Dev Mode** (Inspect → Code section), so it works
 even on files you can only view. Entirely offline — nothing leaves your file.
-Works on any plan.
+Reads variables on any plan in Design mode; Dev Mode availability follows your
+Figma Dev Mode access.
 
 How to use: in Design mode, select one or more frames, open the plugin, and copy
 the JSON. In Dev Mode, select a frame and pick "Design to Code JSON" as the code
 generator. Output updates as you change your selection.
 
 ## Tags (max 5)
-codegen, components, flutter, compose, dev mode
+codegen, components, design to code, dev mode, llm
 
 ## Category
 Development
