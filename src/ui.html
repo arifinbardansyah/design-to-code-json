@@ -37,13 +37,6 @@
       <button class="primary" id="copy">Copy JSON</button>
     </div>
     <div class="opts">
-      <label title="How many variable modes to emit per colour/dimension.">Modes
-        <select id="modes">
-          <option value="lightDark" selected>Light + Dark</option>
-          <option value="default">Default only</option>
-          <option value="all">All</option>
-        </select>
-      </label>
       <label title="Split a component set into one definition per structurally-distinct variant (e.g. expanded=yes vs no). Value-only variants (colour/size/state) still share one definition."><input type="checkbox" id="variants" /> Split variants</label>
     </div>
     <div class="hint">
@@ -61,15 +54,12 @@
       const status = (m) => { document.getElementById('status').textContent = m; };
 
       const getOptions = () => ({
-        modes: document.getElementById('modes').value,
         variants: document.getElementById('variants').checked,
       });
       const sendOptions = () =>
         parent.postMessage({ pluginMessage: { type: 'options', options: getOptions() } }, '*');
 
-      for (const id of ['modes', 'variants']) {
-        document.getElementById(id).addEventListener('change', sendOptions);
-      }
+      document.getElementById('variants').addEventListener('change', sendOptions);
 
       onmessage = (e) => {
         const msg = e.data.pluginMessage;

@@ -10,16 +10,6 @@
   "codegenPreferences": [
     {
       "itemType": "select",
-      "propertyName": "modes",
-      "label": "Variable modes",
-      "options": [
-        { "label": "Light + Dark", "value": "lightDark", "isDefault": true },
-        { "label": "Default only", "value": "default" },
-        { "label": "All modes", "value": "all" }
-      ]
-    },
-    {
-      "itemType": "select",
       "propertyName": "variants",
       "label": "Split variants by structure",
       "options": [

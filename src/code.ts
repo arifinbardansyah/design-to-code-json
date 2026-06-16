@@ -10,7 +10,6 @@ import {
   rgbaToHex,
   buildFlatCatalog,
   type FlatCatalog,
-  type ModeOption,
   type RawCatalog,
   type RawCollection,
   type RawValue,
@@ -159,13 +158,12 @@ async function buildCatalog(referenced: Set<string>, includeLocal = true): Promi
 // --- options & per-run context ---------------------------------------------
 
 // Behaviour is fixed (dedupe + component library on, ids dropped, instances not
-// expanded). Configurable: variable-mode selection, and whether to split a
+// expanded, all variable modes emitted). The one option is whether to split a
 // component set into one definition per structurally-distinct variant.
 interface Options {
-  modes: ModeOption;
   variants: boolean;
 }
-let options: Options = { modes: 'lightDark', variants: false };
+let options: Options = { variants: false };
 
 /** Per-run accumulators (kept off module scope so concurrent runs don't race). */
 interface Ctx {
@@ -688,7 +686,7 @@ async function buildDocument(sel: readonly SceneNode[], lean = false): Promise<s
   let textStyles: Record<string, unknown> | undefined;
   try {
     const catalog = await buildCatalog(ctx.vars, !lean);
-    const flat = buildFlatCatalog(catalog, ctx.vars, options.modes);
+    const flat = buildFlatCatalog(catalog, ctx.vars, 'all');
     dimensions = flat.dimensions;
     textStyles = await buildTextStyles(ctx.textStyles);
     const colorMap = { ...ctx.colorStyles, ...(flat.colors ?? {}) };
@@ -715,12 +713,7 @@ async function run(forceCatalogRefresh = false): Promise<void> {
 
 /** Map the manifest-declared codegen preferences onto our Options. */
 function optionsFromCodegen(): Options {
-  const s = figma.codegen.preferences.customSettings;
-  const modes = s.modes as ModeOption;
-  return {
-    modes: modes === 'all' || modes === 'default' || modes === 'lightDark' ? modes : 'lightDark',
-    variants: s.variants === 'on',
-  };
+  return { variants: figma.codegen.preferences.customSettings.variants === 'on' };
 }
 
 if (figma.mode === 'codegen') {

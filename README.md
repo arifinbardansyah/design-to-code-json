@@ -45,8 +45,9 @@ bound-variable names preserved. No design-system assumptions; built for codegen
 The output is **compacted for codegen**: default/zero values are omitted,
 **colours, text styles and spacing/radius are references** (variable or style
 names) resolved once in flat catalogs (`colors`, `textStyles`, `dimensions`) —
-limited to what the selection uses, in the modes you pick. A catalog entry with
-a single mode collapses to a bare value (`"spacing/md": 16`), not `{ mode: 16 }`.
+limited to what the selection uses, across every mode each variable defines. A
+catalog entry with a single mode collapses to a bare value (`"spacing/md": 16`),
+not `{ mode: 16 }`; multi-mode variables stay keyed by mode (e.g. Light/Dark).
 
 ### What each node carries
 
@@ -66,9 +67,9 @@ a single mode collapses to a bare value (`"spacing/md": 16`), not `{ mode: 16 }`
   keeps a per-run `segments` array.
 - **Constraints** — only when non-default (e.g. `SCALE` icons).
 
-### Behaviour (fixed) + options
+### Behaviour (fixed) + the one option
 
-The output is opinionated; only variable modes and variant-splitting are configurable:
+The output is opinionated; the only control is variant-splitting:
 
 - **Component library** (always on) — uses Figma's own component model: each
   container component is emitted once into `components` (with `{{prop}}`
@@ -80,8 +81,9 @@ The output is opinionated; only variable modes and variant-splitting are configu
   into the same `components` map, with differing fields as props (see below).
 - **Node ids** are always dropped (codegen never needs them); instances are
   never expanded inline (they resolve via `components`).
-- **Modes** (default Light + Dark) — emit `Light + Dark`, `Default only`, or
-  `All` variable modes in `colors` / `dimensions`.
+- **Variable modes** (fixed) — `colors` / `dimensions` emit **every** mode each
+  variable defines (single mode collapses to a bare value; Light/Dark stays an
+  object). No longer configurable.
 - **Split variants** (default off) — for a component **set**, emit one definition
   per structurally-distinct variant that's used. Value-only variants
   (colour/size/state) still collapse to a single def; only variants that change

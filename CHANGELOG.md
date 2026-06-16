@@ -8,6 +8,14 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-06-16
+
+### Changed
+- **Removed the Variable modes option.** `colors` / `dimensions` now always emit
+  every mode a variable defines (single mode still collapses to a bare value;
+  Light/Dark stays keyed by mode). Drops the editor dropdown and codegen
+  preference — **Split variants** is now the only option.
+
 ## [0.6.0] — 2026-06-16
 
 ### Added
@@ -112,7 +120,8 @@ First public release — live on
 - Runs entirely offline (`networkAccess: none`); reads variables, so it works
   on any Figma plan with editor access.
 
-[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.7.0
 [0.6.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.6.0
 [0.5.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.5.0
 [0.4.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.4.0

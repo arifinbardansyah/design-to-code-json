@@ -60,7 +60,8 @@ Core serialization is shared by `buildDocument(sel)` in `code.ts`: walk roots ->
 `buildFlatCatalog` -> one JSON string. Output keys: `components?`, `nodes`,
 `colors?`, `textStyles?`, `dimensions?`.
 
-**Behaviour is mostly fixed**; the two options are `modes` and `variants`. In
+**Behaviour is mostly fixed**; the one option is `variants` (all variable modes
+are always emitted). In
 `serializeNode`'s INSTANCE branch, container components are serialized once into
 `ctx.components` with `{{prop}}` placeholders (from Figma component text-property
 refs) and instances emitted as `{ use, props }`; leaf/icon instances stay atoms.

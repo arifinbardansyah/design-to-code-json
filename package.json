@@ -1,6 +1,6 @@
 {
   "name": "design-to-code-json",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Figma plugin: export the selected frame as compact, codegen-ready JSON — node tree, colour/text-style catalogs, and reusable components.",
   "private": true,
   "type": "module",
