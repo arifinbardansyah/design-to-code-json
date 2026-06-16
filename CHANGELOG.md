@@ -8,6 +8,14 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-06-16
+
+### Changed
+- **Simplified to one option.** Dedupe components, Component library, and Drop
+  ids are now always on, and Expand instances is gone (instances always resolve
+  via `components`). The only remaining control is **Variable modes**. Removes
+  the matching checkboxes (editor panel) and codegen preferences.
+
 ## [0.3.1] — 2026-06-16
 
 ### Fixed
@@ -77,7 +85,8 @@ First public release — live on
 - Runs entirely offline (`networkAccess: none`); reads variables, so it works
   on any Figma plan with editor access.
 
-[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.4.0
 [0.3.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.3.1
 [0.3.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.3.0
 [0.2.2]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.2.2

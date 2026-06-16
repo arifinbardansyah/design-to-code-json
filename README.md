@@ -61,23 +61,22 @@ in the modes you pick.
   per-run `segments` array.
 - **Constraints** — only when non-default (e.g. `SCALE` icons).
 
-### Options (in the plugin panel)
+### Behaviour (fixed) + the one option
 
-- **Dedupe components** (default on) — extract repeated subtrees into a
-  `components` library and rewrite each usage to `{ use, props }` (see below).
-- **Component library** (default off) — use Figma's own component model: each
+The output is opinionated, so there's nothing to configure except variable modes:
+
+- **Component library** (always on) — uses Figma's own component model: each
   container component is emitted once into `components` (with `{{prop}}`
   placeholders where text is bound to a component text property), and **every
   instance** — even single-use ones — becomes a `{ use, variants, props }`
-  reference. Leaf/icon instances stay atoms. Composes with **Dedupe
-  components**, which then extracts any remaining repeated *frames* (e.g. list
-  items that aren't Figma components) into the same `components` map.
-- **Expand instances** (default off) — emit a component instance's full
-  internals instead of collapsing it to a `component` reference + captured
-  icon/text. Turn on only when the component isn't in your codebase.
-- **Drop ids** (default on) — omit node ids; keep names.
-- **Modes** (default Light + Dark) — emit `Light + Dark`, `Default only`, or
-  `All` variable modes in `colors` / `dimensions`.
+  reference. Leaf/icon instances stay compact atoms.
+- **Dedupe components** (always on) — composes with the above: any remaining
+  repeated *frames* (e.g. list items that aren't Figma components) are extracted
+  into the same `components` map, with differing fields as props (see below).
+- **Node ids** are always dropped (codegen never needs them); instances are
+  never expanded inline (they resolve via `components`).
+- **Modes** (the only control; default Light + Dark) — emit `Light + Dark`,
+  `Default only`, or `All` variable modes in `colors` / `dimensions`.
 
 ### Deduplicate components
 

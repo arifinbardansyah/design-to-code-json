@@ -60,16 +60,17 @@ Core serialization is shared by `buildDocument(sel)` in `code.ts`: walk roots ->
 `buildFlatCatalog` -> one JSON string. Output keys: `components?`, `nodes`,
 `colors?`, `textStyles?`, `dimensions?`.
 
-**Component handling** is option-driven in `serializeNode`'s INSTANCE branch:
-atom (default), full inline (`expandInstances`), or — with `componentLibrary` —
-each container component serialized once into `ctx.components` with `{{prop}}`
-placeholders (from Figma component text-property refs) and instances emitted as
-`{ use, props }`. That path is Figma-coupled (reads `getMainComponentAsync`,
+**Behaviour is fixed** (no toggles): the only configurable option is `modes`.
+In `serializeNode`'s INSTANCE branch, container components are serialized once
+into `ctx.components` with `{{prop}}` placeholders (from Figma component
+text-property refs) and instances emitted as `{ use, props }`; leaf/icon
+instances stay atoms. Node ids are always dropped; instances are never expanded
+inline. That path is Figma-coupled (reads `getMainComponentAsync`,
 `componentProperties`, `componentPropertyReferences`), so it's verified in Figma,
-not unit tests. It **composes** with structural dedupe (`synthesizeComponents`,
-pure + tested): when both are on, component-library defs are built inline, then
-dedupe extracts remaining repeated frames; the two `components` maps are merged
-(library defs win on name clash).
+not unit tests. It always **composes** with structural dedupe
+(`synthesizeComponents`, pure + tested): library defs built inline, then dedupe
+extracts remaining repeated frames; the two `components` maps merge (library
+wins on name clash).
 
 **Two entry points**, branched on `figma.mode` at the bottom of `code.ts`:
 - **Editor (Figma/FigJam)** — `figma.showUI` + `run()` on the live selection,

@@ -158,20 +158,12 @@ async function buildCatalog(referenced: Set<string>, includeLocal = true): Promi
 
 // --- options & per-run context ---------------------------------------------
 
+// Behaviour is fixed (dedupe + component library on, ids dropped, instances not
+// expanded); only the variable-mode selection is configurable.
 interface Options {
-  expandInstances: boolean;
   modes: ModeOption;
-  dropIds: boolean;
-  dedupe: boolean;
-  componentLibrary: boolean;
 }
-let options: Options = {
-  expandInstances: false,
-  modes: 'lightDark',
-  dropIds: true,
-  dedupe: true,
-  componentLibrary: false,
-};
+let options: Options = { modes: 'lightDark' };
 
 /** Per-run accumulators (kept off module scope so concurrent runs don't race). */
 interface Ctx {
@@ -367,10 +359,10 @@ async function compactText(node: TextNode, ctx: Ctx): Promise<Record<string, unk
   const segColor = (s: any) =>
     colorOf(Array.isArray(s.fills) ? s.fills[0] : undefined, isAlias(s.boundVariables?.fills?.[0]) ? s.boundVariables.fills[0] : undefined, ctx);
 
-  // In component-library mode, when this text is bound to a component TEXT
-  // property, emit a `{{prop}}` placeholder in the definition and record the prop.
+  // When this text is bound to a component TEXT property (while a component
+  // definition is being built), emit a `{{prop}}` placeholder and record it.
   let characters: string = node.characters;
-  if (options.componentLibrary && ctx.propSink) {
+  if (ctx.propSink) {
     const ref = (node as any).componentPropertyReferences?.characters;
     if (typeof ref === 'string') {
       const pn = cleanProp(ref);
@@ -512,37 +504,27 @@ async function scanOverrides(node: SceneNode): Promise<Record<string, unknown>> 
 async function serializeNode(node: SceneNode, depth: number, ctx: Ctx): Promise<unknown> {
   const n = node as any;
   const out: Record<string, unknown> = {};
-  if (!options.dropIds) out.id = node.id;
   out.name = node.name;
   out.type = node.type;
 
   if (node.type === 'INSTANCE') {
     const name = await componentName(node);
 
-    // Component-library mode: container components become `{ use, props }`
-    // references resolving into the `components` definitions; leaf/icon
-    // instances stay atoms (below).
-    if (options.componentLibrary) {
-      const main = await node.getMainComponentAsync();
-      if (main && 'children' in main && isContainerComponent(main)) {
-        await ensureComponentDef(name, main as ComponentNode, depth, ctx);
-        const props = instanceProps(node);
-        return prune({ use: name, variants: variantsOf(node), props: Object.keys(props).length ? props : undefined });
-      }
+    // Container components become `{ use, props }` references resolving into the
+    // `components` definitions; leaf/icon instances stay compact atoms.
+    const main = await node.getMainComponentAsync();
+    if (main && 'children' in main && isContainerComponent(main)) {
+      await ensureComponentDef(name, main as ComponentNode, depth, ctx);
+      const props = instanceProps(node);
+      return prune({ use: name, variants: variantsOf(node), props: Object.keys(props).length ? props : undefined });
     }
 
-    // Instance as an atom: identity + captured overrides, no internals.
-    if (options.componentLibrary || !options.expandInstances) {
-      out.component = name;
-      out.variants = variantsOf(node);
-      Object.assign(out, await scanOverrides(node));
-      const fixed = n.layoutSizingHorizontal === 'FIXED' || !('layoutMode' in n) || n.layoutMode === 'NONE';
-      if (fixed && 'width' in n) out.size = { width: Math.round(n.width), height: Math.round(n.height) };
-      return prune(out);
-    }
-    // Expand instances: full internals, with identity retained.
     out.component = name;
     out.variants = variantsOf(node);
+    Object.assign(out, await scanOverrides(node));
+    const fixed = n.layoutSizingHorizontal === 'FIXED' || !('layoutMode' in n) || n.layoutMode === 'NONE';
+    if (fixed && 'width' in n) out.size = { width: Math.round(n.width), height: Math.round(n.height) };
+    return prune(out);
   }
 
   if (node.type === 'TEXT') {
@@ -605,19 +587,14 @@ async function buildDocument(sel: readonly SceneNode[], lean = false): Promise<s
   for (const node of sel) nodes.push(await safeSerialize(node, 0, ctx));
 
   // Component library (Figma component identity) and dedupe (repeated subtrees)
-  // compose: the former captures real components inline during serialization,
-  // the latter then extracts any remaining repeated frames. Library defs win on
-  // a name clash.
-  let components: Record<string, unknown> | undefined;
-  const lib = options.componentLibrary ? ctx.components : {};
-  if (options.dedupe) {
-    const synth = synthesizeComponents(nodes as any[]);
-    nodes = synth.nodes;
-    const merged = { ...synth.components, ...lib };
-    if (Object.keys(merged).length) components = merged;
-  } else if (Object.keys(lib).length) {
-    components = lib as Record<string, unknown>;
-  }
+  // compose: the former captures real components inline during serialization
+  // (into `ctx.components`), the latter then extracts any remaining repeated
+  // frames. Library defs win on a name clash.
+  const synth = synthesizeComponents(nodes as any[]);
+  nodes = synth.nodes;
+  const merged = { ...synth.components, ...ctx.components };
+  const components: Record<string, unknown> | undefined =
+    Object.keys(merged).length ? merged : undefined;
 
   // The catalogs are best-effort: if variable/style reads fail (e.g. limited
   // access in Dev Mode), still emit the node tree rather than nothing.
@@ -652,16 +629,8 @@ async function run(forceCatalogRefresh = false): Promise<void> {
 
 /** Map the manifest-declared codegen preferences onto our Options. */
 function optionsFromCodegen(): Options {
-  const s = figma.codegen.preferences.customSettings;
-  const on = (key: string, dflt: boolean) => (s[key] === undefined ? dflt : s[key] === 'on');
-  const modes = s.modes as ModeOption;
-  return {
-    expandInstances: on('expandInstances', false),
-    modes: modes === 'all' || modes === 'default' || modes === 'lightDark' ? modes : 'lightDark',
-    dropIds: on('dropIds', true),
-    dedupe: on('dedupe', true),
-    componentLibrary: on('componentLibrary', false),
-  };
+  const modes = figma.codegen.preferences.customSettings.modes as ModeOption;
+  return { modes: modes === 'all' || modes === 'default' || modes === 'lightDark' ? modes : 'lightDark' };
 }
 
 if (figma.mode === 'codegen') {

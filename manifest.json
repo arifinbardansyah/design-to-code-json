@@ -17,42 +17,6 @@
         { "label": "Default only", "value": "default" },
         { "label": "All modes", "value": "all" }
       ]
-    },
-    {
-      "itemType": "select",
-      "propertyName": "dedupe",
-      "label": "Dedupe components",
-      "options": [
-        { "label": "On", "value": "on", "isDefault": true },
-        { "label": "Off", "value": "off" }
-      ]
-    },
-    {
-      "itemType": "select",
-      "propertyName": "componentLibrary",
-      "label": "Component library",
-      "options": [
-        { "label": "Off", "value": "off", "isDefault": true },
-        { "label": "On", "value": "on" }
-      ]
-    },
-    {
-      "itemType": "select",
-      "propertyName": "expandInstances",
-      "label": "Expand instances",
-      "options": [
-        { "label": "Off", "value": "off", "isDefault": true },
-        { "label": "On", "value": "on" }
-      ]
-    },
-    {
-      "itemType": "select",
-      "propertyName": "dropIds",
-      "label": "Drop node ids",
-      "options": [
-        { "label": "On", "value": "on", "isDefault": true },
-        { "label": "Off", "value": "off" }
-      ]
     }
   ],
   "documentAccess": "dynamic-page",
