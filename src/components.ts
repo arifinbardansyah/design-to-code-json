@@ -160,8 +160,12 @@ export function finalizeVariants(
     } else {
       const variants: Record<string, Component> = {};
       for (const s of structs) {
-        variants[s.repCombo] = s.props ? { node: s.node, props: s.props } : { node: s.node };
-        pointer.set(`${setName}\n${s.sig}`, s.repCombo);
+        // Distinct structures can share a combo (e.g. a boolean-driven layout);
+        // disambiguate so one never silently overwrites another.
+        let key = s.repCombo;
+        for (let k = 2; key in variants; k++) key = `${s.repCombo} #${k}`;
+        variants[key] = s.props ? { node: s.node, props: s.props } : { node: s.node };
+        pointer.set(`${setName}\n${s.sig}`, key);
       }
       components[setName] = { variants };
     }

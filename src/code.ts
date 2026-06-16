@@ -462,6 +462,17 @@ function isContainerComponent(main: any): boolean {
   return found;
 }
 
+/** A variant key for a use: VARIANT + BOOLEAN component properties (the ones that
+ *  can select a different structure), e.g. "expanded=yes" or "showFooter=true". */
+function comboString(node: InstanceNode): string {
+  const parts: string[] = [];
+  for (const [k, p] of Object.entries(node.componentProperties ?? {})) {
+    const t = (p as any).type;
+    if (t === 'VARIANT' || t === 'BOOLEAN') parts.push(`${k.split('#')[0]}=${(p as any).value}`);
+  }
+  return parts.join(', ');
+}
+
 /** Instance overrides exposed as component properties (TEXT/BOOLEAN) -> props.
  *  Variants are handled separately; instance-swaps surface as child use-refs. */
 function instanceProps(node: InstanceNode): Record<string, unknown> {
@@ -513,9 +524,7 @@ async function variantSigOf(node: InstanceNode, main: ComponentNode, depth: numb
   ctx.variantSig.set(main.id, sig);
   const structs = ctx.variantStructures.get(setName) ?? [];
   if (!structs.some((s) => s.sig === sig)) {
-    const combo = variantsOf(node);
-    const repCombo = combo ? Object.entries(combo).map(([k, v]) => `${k}=${v}`).join(', ') : setName;
-    structs.push({ sig, repCombo, node: tree as any, props });
+    structs.push({ sig, repCombo: comboString(node) || setName, node: tree as any, props });
     ctx.variantStructures.set(setName, structs);
   }
   return sig;

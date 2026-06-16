@@ -158,5 +158,24 @@ const listItem = (n, title, desc) => ({
   truthy('__sig stripped', roots[0].__sig === undefined && roots[1].__sig === undefined);
 }
 
+// (c) two distinct structures sharing a repCombo -> disambiguated, neither lost.
+{
+  const roots = [
+    { use: 'Card', __sig: 'x', variants: {} },
+    { use: 'Card', __sig: 'y', variants: {} },
+  ];
+  const components = {};
+  const structures = new Map([
+    ['Card', [
+      { sig: 'x', repCombo: 'Card', node: { name: 'Card', type: 'COMPONENT', children: ['h'] } },
+      { sig: 'y', repCombo: 'Card', node: { name: 'Card', type: 'COMPONENT', children: ['h', 'f'] } },
+    ]],
+  ]);
+  C.finalizeVariants(roots, components, structures);
+  eq('collision -> two distinct variant keys', Object.keys(components.Card.variants), ['Card', 'Card #2']);
+  eq('first use-ref -> Card', roots[0].variant, 'Card');
+  eq('second use-ref -> Card #2', roots[1].variant, 'Card #2');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
