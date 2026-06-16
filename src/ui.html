@@ -38,6 +38,7 @@
     </div>
     <div class="opts">
       <label title="Extract repeated subtrees into reusable components; fields that differ across uses become props."><input type="checkbox" id="dedupe" checked /> Dedupe components</label>
+      <label title="Emit each Figma component once into `components` (with {{prop}} placeholders for component text properties); every instance becomes a { use, props } reference. Leaf/icon instances stay atoms. Overrides existing dedupe."><input type="checkbox" id="componentLibrary" /> Component library</label>
       <label title="Walk inside component instances and emit their full internals, instead of collapsing each to a component reference + captured icon/text."><input type="checkbox" id="expand" /> Expand instances</label>
       <label title="Omit Figma node ids (codegen never needs them)."><input type="checkbox" id="dropIds" checked /> Drop ids</label>
       <label title="How many variable modes to emit per colour/dimension.">Modes
@@ -50,9 +51,10 @@
     </div>
     <div class="hint">
       Select one or more frames — output updates automatically. Exports compact
-      <code>nodes</code> (tree + layout/style/colour + bound-variable refs;
-      instances as atoms), <code>variables</code> (name-keyed catalog), and
-      <code>tokens</code> (W3C/DTCG). Copy the JSON for codegen.
+      <code>nodes</code> (tree + layout/style/colour + bound-variable refs) plus
+      flat <code>colors</code>, <code>textStyles</code> and <code>dimensions</code>
+      catalogs, and (with dedupe or component library) a <code>components</code>
+      map. Copy the JSON for codegen.
     </div>
     <textarea id="out" spellcheck="false" readonly></textarea>
     <div id="status"></div>
@@ -63,6 +65,7 @@
 
       const getOptions = () => ({
         dedupe: document.getElementById('dedupe').checked,
+        componentLibrary: document.getElementById('componentLibrary').checked,
         expandInstances: document.getElementById('expand').checked,
         dropIds: document.getElementById('dropIds').checked,
         modes: document.getElementById('modes').value,
@@ -70,7 +73,7 @@
       const sendOptions = () =>
         parent.postMessage({ pluginMessage: { type: 'options', options: getOptions() } }, '*');
 
-      for (const id of ['dedupe', 'expand', 'dropIds', 'modes']) {
+      for (const id of ['dedupe', 'componentLibrary', 'expand', 'dropIds', 'modes']) {
         document.getElementById(id).addEventListener('change', sendOptions);
       }
 

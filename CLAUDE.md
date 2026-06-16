@@ -60,6 +60,15 @@ Core serialization is shared by `buildDocument(sel)` in `code.ts`: walk roots ->
 `buildFlatCatalog` -> one JSON string. Output keys: `components?`, `nodes`,
 `colors?`, `textStyles?`, `dimensions?`.
 
+**Component handling** is option-driven in `serializeNode`'s INSTANCE branch:
+atom (default), full inline (`expandInstances`), or — with `componentLibrary` —
+each container component serialized once into `ctx.components` with `{{prop}}`
+placeholders (from Figma component text-property refs) and instances emitted as
+`{ use, props }`. That path is Figma-coupled (reads `getMainComponentAsync`,
+`componentProperties`, `componentPropertyReferences`), so it's verified in Figma,
+not unit tests; structural dedupe (`synthesizeComponents`, pure + tested) is the
+separate `dedupe` path and is skipped when `componentLibrary` is on.
+
 **Two entry points**, branched on `figma.mode` at the bottom of `code.ts`:
 - **Editor (Figma/FigJam)** — `figma.showUI` + `run()` on the live selection,
   posting to `src/ui.html` on every `selectionchange`. Needs editor access.

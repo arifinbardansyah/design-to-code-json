@@ -17,7 +17,7 @@ import {
   type RawVariable,
   type VarType,
 } from './transform';
-import { synthesizeComponents } from './components';
+import { synthesizeComponents, type Component } from './components';
 
 // Injected at build time from package.json (see tool/build.mjs).
 declare const __VERSION__: string;
@@ -163,13 +163,26 @@ interface Options {
   modes: ModeOption;
   dropIds: boolean;
   dedupe: boolean;
+  componentLibrary: boolean;
 }
-let options: Options = { expandInstances: false, modes: 'lightDark', dropIds: true, dedupe: true };
+let options: Options = {
+  expandInstances: false,
+  modes: 'lightDark',
+  dropIds: true,
+  dedupe: true,
+  componentLibrary: false,
+};
 
 /** Per-run accumulators (kept off module scope so concurrent runs don't race). */
 interface Ctx {
   vars: Set<string>; // bound variable ids referenced by the selection
   textStyles: Set<string>; // text style ids referenced by the selection
+  // Component-library mode: each Figma component serialized once into `components`
+  // (instances become `{ use, props }`). `building` guards cycles; `propSink`
+  // collects the prop names of the component currently being defined.
+  components: Record<string, Component>;
+  building: Set<string>;
+  propSink: Set<string> | null;
 }
 
 /** Drop keys whose value is `undefined`. */
@@ -354,7 +367,19 @@ async function compactText(node: TextNode, ctx: Ctx): Promise<Record<string, unk
   const segColor = (s: any) =>
     colorOf(Array.isArray(s.fills) ? s.fills[0] : undefined, isAlias(s.boundVariables?.fills?.[0]) ? s.boundVariables.fills[0] : undefined, ctx);
 
-  const base: Record<string, unknown> = { characters: node.characters, textStyle: styleName, align };
+  // In component-library mode, when this text is bound to a component TEXT
+  // property, emit a `{{prop}}` placeholder in the definition and record the prop.
+  let characters: string = node.characters;
+  if (options.componentLibrary && ctx.propSink) {
+    const ref = (node as any).componentPropertyReferences?.characters;
+    if (typeof ref === 'string') {
+      const pn = cleanProp(ref);
+      ctx.propSink.add(pn);
+      characters = `{{${pn}}}`;
+    }
+  }
+
+  const base: Record<string, unknown> = { characters, textStyle: styleName, align };
   if (segs.length <= 1) {
     const s = segs[0];
     if (s) {
@@ -392,6 +417,57 @@ function variantsOf(node: InstanceNode): Record<string, string> | undefined {
     if ((v as any).type === 'VARIANT') variants[k.split('#')[0]] = String((v as any).value);
   }
   return Object.keys(variants).length ? variants : undefined;
+}
+
+// --- component-library mode -------------------------------------------------
+
+/** A Figma property key ("Title#12:3") -> a stable snake_case prop name. */
+function cleanProp(key: string): string {
+  return key.split('#')[0].toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'prop';
+}
+
+/** A "container" component has composed content (text or nested instances) and
+ *  is worth a definition; bare icon/vector components stay as compact atoms. */
+function isContainerComponent(main: any): boolean {
+  let found = false;
+  const walk = (n: any): void => {
+    for (const c of n.children ?? []) {
+      if (found) return;
+      if (c.type === 'TEXT' || c.type === 'INSTANCE') {
+        found = true;
+        return;
+      }
+      walk(c);
+    }
+  };
+  walk(main);
+  return found;
+}
+
+/** Instance overrides exposed as component properties (TEXT/BOOLEAN) -> props.
+ *  Variants are handled separately; instance-swaps surface as child use-refs. */
+function instanceProps(node: InstanceNode): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, p] of Object.entries(node.componentProperties ?? {})) {
+    const t = (p as any).type;
+    if (t === 'TEXT' || t === 'BOOLEAN') out[cleanProp(key)] = (p as any).value;
+  }
+  return out;
+}
+
+/** Serialize a main component once into `ctx.components[name]` (cycle-guarded). */
+async function ensureComponentDef(name: string, main: ComponentNode, depth: number, ctx: Ctx): Promise<void> {
+  if (ctx.components[name] || ctx.building.has(name)) return;
+  ctx.building.add(name);
+  const prevSink = ctx.propSink;
+  const sink = new Set<string>();
+  ctx.propSink = sink;
+  const node = (await serializeNode(main as unknown as SceneNode, depth, ctx)) as Record<string, unknown>;
+  ctx.propSink = prevSink;
+  ctx.building.delete(name);
+  const def: Component = { node: node as any };
+  if (sink.size) def.props = [...sink];
+  ctx.components[name] = def;
 }
 
 async function componentName(node: InstanceNode): Promise<string> {
@@ -440,17 +516,32 @@ async function serializeNode(node: SceneNode, depth: number, ctx: Ctx): Promise<
   out.name = node.name;
   out.type = node.type;
 
-  // Instance as an atom: identity + captured overrides, no internals.
-  if (node.type === 'INSTANCE' && !options.expandInstances) {
-    out.component = await componentName(node);
-    out.variants = variantsOf(node);
-    Object.assign(out, await scanOverrides(node));
-    const fixed = n.layoutSizingHorizontal === 'FIXED' || !('layoutMode' in n) || n.layoutMode === 'NONE';
-    if (fixed && 'width' in n) out.size = { width: Math.round(n.width), height: Math.round(n.height) };
-    return prune(out);
-  }
   if (node.type === 'INSTANCE') {
-    out.component = await componentName(node);
+    const name = await componentName(node);
+
+    // Component-library mode: container components become `{ use, props }`
+    // references resolving into the `components` definitions; leaf/icon
+    // instances stay atoms (below).
+    if (options.componentLibrary) {
+      const main = await node.getMainComponentAsync();
+      if (main && 'children' in main && isContainerComponent(main)) {
+        await ensureComponentDef(name, main as ComponentNode, depth, ctx);
+        const props = instanceProps(node);
+        return prune({ use: name, variants: variantsOf(node), props: Object.keys(props).length ? props : undefined });
+      }
+    }
+
+    // Instance as an atom: identity + captured overrides, no internals.
+    if (options.componentLibrary || !options.expandInstances) {
+      out.component = name;
+      out.variants = variantsOf(node);
+      Object.assign(out, await scanOverrides(node));
+      const fixed = n.layoutSizingHorizontal === 'FIXED' || !('layoutMode' in n) || n.layoutMode === 'NONE';
+      if (fixed && 'width' in n) out.size = { width: Math.round(n.width), height: Math.round(n.height) };
+      return prune(out);
+    }
+    // Expand instances: full internals, with identity retained.
+    out.component = name;
     out.variants = variantsOf(node);
   }
 
@@ -503,12 +594,22 @@ async function safeSerialize(node: SceneNode, depth: number, ctx: Ctx): Promise<
  *  `lean` (Dev Mode codegen) skips the full local-variable enumeration to stay
  *  within codegen's 3s timeout. */
 async function buildDocument(sel: readonly SceneNode[], lean = false): Promise<string> {
-  const ctx: Ctx = { vars: new Set(), textStyles: new Set() };
+  const ctx: Ctx = {
+    vars: new Set(),
+    textStyles: new Set(),
+    components: {},
+    building: new Set(),
+    propSink: null,
+  };
   let nodes: unknown[] = [];
   for (const node of sel) nodes.push(await safeSerialize(node, 0, ctx));
 
   let components: Record<string, unknown> | undefined;
-  if (options.dedupe) {
+  if (options.componentLibrary) {
+    // Definitions are built inline during serialization (instances are emitted
+    // as `{ use, props }`), so just surface what was collected.
+    if (Object.keys(ctx.components).length) components = ctx.components as Record<string, unknown>;
+  } else if (options.dedupe) {
     const synth = synthesizeComponents(nodes as any[]);
     nodes = synth.nodes;
     if (Object.keys(synth.components).length) components = synth.components;
@@ -555,6 +656,7 @@ function optionsFromCodegen(): Options {
     modes: modes === 'all' || modes === 'default' || modes === 'lightDark' ? modes : 'lightDark',
     dropIds: on('dropIds', true),
     dedupe: on('dedupe', true),
+    componentLibrary: on('componentLibrary', false),
   };
 }
 

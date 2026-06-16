@@ -29,6 +29,15 @@
     },
     {
       "itemType": "select",
+      "propertyName": "componentLibrary",
+      "label": "Component library",
+      "options": [
+        { "label": "Off", "value": "off", "isDefault": true },
+        { "label": "On", "value": "on" }
+      ]
+    },
+    {
+      "itemType": "select",
       "propertyName": "expandInstances",
       "label": "Expand instances",
       "options": [

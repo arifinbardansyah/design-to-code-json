@@ -65,6 +65,11 @@ in the modes you pick.
 
 - **Dedupe components** (default on) — extract repeated subtrees into a
   `components` library and rewrite each usage to `{ use, props }` (see below).
+- **Component library** (default off) — use Figma's own component model: each
+  container component is emitted once into `components` (with `{{prop}}`
+  placeholders where text is bound to a component text property), and **every
+  instance** — even single-use ones — becomes a `{ use, variants, props }`
+  reference. Leaf/icon instances stay atoms. Overrides **Dedupe components**.
 - **Expand instances** (default off) — emit a component instance's full
   internals instead of collapsing it to a `component` reference + captured
   icon/text. Turn on only when the component isn't in your codebase.

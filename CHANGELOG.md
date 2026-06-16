@@ -8,6 +8,17 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-06-16
+
+### Added
+- **Component library** option — emit each Figma component once into
+  `components` (with `{{prop}}` placeholders for text bound to component text
+  properties), and turn every instance into a `{ use, variants, props }`
+  reference, even single-use ones. Uses Figma's component identity rather than
+  repeated-subtree detection, so a single instance no longer collapses to a
+  "too simple" atom. Leaf/icon instances stay atoms. Available in the editor
+  panel and as a Dev Mode codegen preference; overrides Dedupe components.
+
 ## [0.2.2] — 2026-06-16
 
 ### Changed
@@ -57,7 +68,8 @@ First public release — live on
 - Runs entirely offline (`networkAccess: none`); reads variables, so it works
   on any Figma plan with editor access.
 
-[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.3.0
 [0.2.2]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.2.2
 [0.2.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.2.1
 [0.2.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.2.0
