@@ -67,24 +67,23 @@ not `{ mode: 16 }`; multi-mode variables stay keyed by mode (e.g. Light/Dark).
   keeps a per-run `segments` array.
 - **Constraints** — only when non-default (e.g. `SCALE` icons).
 
-### Behaviour (fixed) + the one option
+### Behaviour + the one option
 
-The output is opinionated; the only control is the **Variants** mode (how
-component sets are emitted):
+The output is opinionated. The only control is the **Variants** mode (how
+component sets are emitted); everything else is automatic:
 
-- **Component library** (always on) — uses Figma's own component model: each
-  container component is emitted once into `components` (with `{{prop}}`
-  placeholders where text is bound to a component text property), and **every
-  instance** — even single-use ones — becomes a `{ use, variants, props }`
-  reference. Leaf/icon instances stay compact atoms.
-- **Dedupe components** (always on) — composes with the above: any remaining
-  repeated *frames* (e.g. list items that aren't Figma components) are extracted
-  into the same `components` map, with differing fields as props (see below).
-- **Node ids** are always dropped (codegen never needs them); instances are
-  never expanded inline (they resolve via `components`).
-- **Variable modes** (fixed) — `colors` / `dimensions` emit **every** mode each
-  variable defines (single mode collapses to a bare value; Light/Dark stays an
-  object). No longer configurable.
+- **Component library** — uses Figma's own component model: each container
+  component is emitted once into `components` (with `{{prop}}` placeholders where
+  text is bound to a component text property), and **every instance** — even
+  single-use ones — becomes a `{ use, variants, props }` reference. Leaf/icon
+  instances stay compact atoms.
+- **Dedupe components** — composes with the above: any remaining repeated
+  *frames* (e.g. list items that aren't Figma components) are extracted into the
+  same `components` map, with differing fields as props (see below).
+- **Node ids** are dropped; instances are never expanded inline (they resolve
+  via `components`).
+- **Variable modes** — `colors` / `dimensions` emit **every** mode each variable
+  defines (single mode collapses to a bare value; Light/Dark stays an object).
 - **Variants** (default `Off`) — one control with three modes for how a component
   **set** is emitted. The three modes are nested: each does what the previous does
   plus more.
