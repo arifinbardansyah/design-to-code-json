@@ -8,6 +8,12 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+### Changed
+- Dev Mode: the **Variants** codegen dropdown now carries terse hints in its
+  option labels (`Off · one shared def`, `Value table · per-axis deltas`) — the
+  only place Figma's native preference UI allows explanatory text (it has no
+  description/tooltip field). Editor panel + README are unchanged.
+
 ## [0.10.0] — 2026-06-17
 
 ### Changed
