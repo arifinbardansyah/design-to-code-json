@@ -8,6 +8,8 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-06-17
+
 ### Changed
 - Dev Mode: the **Variants** codegen dropdown now carries terse hints in its
   option labels (`Off · one shared def`, `Value table · per-axis deltas`) — the
@@ -196,7 +198,8 @@ First public release — live on
 - Runs entirely offline (`networkAccess: none`); reads variables, so it works
   on any Figma plan with editor access.
 
-[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.10.1
 [0.10.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.10.0
 [0.9.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.9.0
 [0.8.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.8.1

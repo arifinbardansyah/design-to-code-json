@@ -41,17 +41,15 @@ the JSON. In Dev Mode, select a frame and pick "Design to Code JSON" as the code
 generator. Output updates as you change your selection.
 
 ——
-Code version 0.10.0 · changelog:
+Code version 0.10.1 · changelog:
 github.com/arifinbardansyah/design-to-code-json/blob/main/CHANGELOG.md
 (Figma's own version counter differs; the Dev Mode code section also prints the
-running build as "Design to Code JSON (v0.10.0)".)
+running build as "Design to Code JSON (v0.10.1)".)
 
-## Release notes (this version — code v0.10.0)
-Clearer variant options. The two separate "Split variants" and "Variant value
-table" checkboxes are now one **Variants** control with three modes — *Off*,
-*Split by structure*, and *Value table* — each with a short description and a
-collapsible example, so it's obvious what each does and how they relate (Value
-table builds on Split by structure). Same JSON output as before.
+## Release notes (this version — code v0.10.1)
+Dev Mode polish: the **Variants** option dropdown now spells out what each mode
+does (e.g. "Off · one shared def", "Value table · per-axis deltas"), so the
+choice is clearer right in the Inspect panel. Same JSON output as before.
 
 ## Tags (max 5)
 codegen, components, design to code, dev mode, llm
