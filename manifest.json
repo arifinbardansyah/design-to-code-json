@@ -13,9 +13,9 @@
       "propertyName": "variantMode",
       "label": "Variants",
       "options": [
-        { "label": "Off", "value": "off", "isDefault": true },
+        { "label": "Off · one shared def", "value": "off", "isDefault": true },
         { "label": "Split by structure", "value": "split" },
-        { "label": "Value table", "value": "table" }
+        { "label": "Value table · per-axis deltas", "value": "table" }
       ]
     }
   ],
