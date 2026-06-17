@@ -218,8 +218,3 @@ src/ui.html              panel (output textarea + copy)
 tool/build.mjs           esbuild bundler
 tool/test_transform.mjs  resolver/transform unit tests
 ```
-
-## Not included (yet)
-
-- Image / vector **asset export** (PNG / SVG).
-- Writing **into** Figma (code → design).
