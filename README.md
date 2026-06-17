@@ -15,7 +15,7 @@ bound-variable names preserved. No design-system assumptions; built for codegen
 {
   // 0) Reusable components: every Figma component (by identity) plus any
   //    repeated frames (deduped). Fields that differ across uses become props.
-  //    { "ListItem": { "props": ["title_text"], "node": { ..."{{title_text}}"... } } }
+  //    { "ListItem": { "props": ["title_characters"], "node": { ..."{{title_characters}}"... } } }
   "components": { /* ... */ },
 
   // 1) The selected tree. Colours, text styles AND spacing/radius are emitted as
@@ -116,14 +116,19 @@ The output is opinionated; the only control is variant-splitting:
 
 ### Deduplicate components
 
-A pure post-process over the serialized tree. Two container subtrees are "the
-same component" when their **structure** matches (type, layout, text-style role,
-child shape, and which value-fields are present) regardless of concrete values.
+A pure post-process over the serialized tree (and the bodies of the component
+defs). Two container subtrees are "the same component" when their **structure**
+matches (type, layout, text-style role, child shape, and which value-fields are
+present) regardless of concrete values **or names** — so structurally-identical
+siblings with distinct labels (e.g. day cells `Senin`/`Selasa`/…) still group.
 For each group of ≥2 occurrences:
 
 - a field that **differs** across occurrences becomes a **prop** (slot), named
-  from the tree path (`title_text`, `secondary_text_text`; deepened to
-  `parent_child_field` on collisions);
+  from the tree path + the field's literal name (`title_characters`,
+  `secondary_text_characters`; deepened to `parent_child_field` on collisions);
+- a nested **use-ref** (a component instance) that differs contributes one prop
+  per varying field, named `component_field` (`button_variants`, `button_props`,
+  `button_variant`), with object values served whole;
 - a field that's **identical** everywhere is baked into the template;
 - each usage is rewritten to `{ "use": "ListItem", "props": { ... } }`.
 

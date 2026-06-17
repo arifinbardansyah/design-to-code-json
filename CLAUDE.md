@@ -116,3 +116,14 @@ wins on name clash).
 from manifest -> pick `manifest.json`. Select a frame -> run "Design to Code
 JSON". Output updates on selection change; use Re-read to force a fresh variable
 catalog pull.
+
+## Releasing
+
+Shipping a version follows the canonical checklist in **`RELEASING.md`** — do not
+improvise it. In short: bump `package.json`, roll `CHANGELOG.md` (`Unreleased` ->
+`[X.Y.Z]` + date + link refs) and `LISTING.md` (code-version line + release
+note), `npm run check`, commit, ff-merge to `main`, `git tag -a vX.Y.Z`, then
+`git push origin main --follow-tags`. The Figma Community upload is a **separate
+manual step** (RELEASING.md step 9) that does not track this repo, and Figma's own
+release counter never matches our `vX.Y.Z` — the `LISTING.md` release note bridges
+them. See `RELEASING.md` for the full steps and tag-backfill recipe.

@@ -16,15 +16,25 @@ const SLOT_FIELDS = [
   'image', 'icon', 'components', 'text', 'size', 'variants', 'opacity',
 ];
 
-const FIELD_SUFFIX: Record<string, string> = {
-  characters: 'text', color: 'color', fill: 'fill', fills: 'fills',
-  stroke: 'stroke', strokes: 'strokes', image: 'image', icon: 'icon',
-  components: 'components', text: 'text', size: 'size', variants: 'variant', opacity: 'opacity',
-};
-
 const MIN_DESCENDANTS = 2; // don't componentize trivially small containers
 
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x));
+
+/** Stable JSON for comparison: object keys sorted recursively, so a mere
+ *  key-order difference between occurrences doesn't read as a value difference
+ *  (Figma emits prop objects in variant-dependent key order). */
+function canon(x: unknown): string {
+  const norm = (v: any): any => {
+    if (Array.isArray(v)) return v.map(norm);
+    if (v && typeof v === 'object') {
+      const o: Record<string, unknown> = {};
+      for (const k of Object.keys(v).sort()) o[k] = norm(v[k]);
+      return o;
+    }
+    return v;
+  };
+  return JSON.stringify(norm(x));
+}
 
 function snake(s: string | undefined): string {
   return (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'x';
@@ -41,11 +51,15 @@ function normName(name?: string): string {
 }
 
 /** Structural signature — excludes the concrete values of SLOT_FIELDS but keeps
- *  which of them are present, so structure matches while values may vary. */
-export function signature(node: Node): string {
+ *  which of them are present, so structure matches while values may vary.
+ *  `ignoreName` drops the node name from the key so structurally-identical
+ *  siblings with distinct labels (e.g. day cells `Senin`/`Selasa`/…) still
+ *  group; the variant-split path in code.ts relies on the name-sensitive
+ *  default, so this stays opt-in. */
+export function signature(node: Node, opts?: { ignoreName?: boolean }): string {
   const sig = {
     type: node.type,
-    name: normName(node.name),
+    name: opts?.ignoreName ? '' : normName(node.name),
     layout: node.layout,
     constraints: node.constraints,
     cornerRadius: node.cornerRadius,
@@ -55,7 +69,7 @@ export function signature(node: Node): string {
     align: node.align,
     component: node.component,
     has: SLOT_FIELDS.filter((f) => node[f] !== undefined).sort(),
-    children: (node.children ?? []).map(signature),
+    children: (node.children ?? []).map((c: Node) => signature(c, opts)),
   };
   return JSON.stringify(sig);
 }
@@ -64,20 +78,33 @@ function descendantCount(n: Node): number {
   return (n.children ?? []).reduce((a: number, c: Node) => a + 1 + descendantCount(c), 0);
 }
 
-function countContainers(nodes: Node[], counts: Map<string, number>): void {
+function countContainers(nodes: Node[], counts: Map<string, number>, opts?: { ignoreName?: boolean }): void {
   for (const n of nodes) {
     if (n.children?.length) {
-      const s = signature(n);
+      const s = signature(n, opts);
       counts.set(s, (counts.get(s) ?? 0) + 1);
     }
-    if (n.children) countContainers(n.children, counts);
+    if (n.children) countContainers(n.children, counts, opts);
   }
 }
 
 interface Slot { path: number[]; field: string; propName: string; }
 
+/** A use-ref's per-instance identity fields. When they vary across occurrences
+ *  they become props named `<component>_<field>` (the field's *literal* name, so
+ *  `variants` and `variant` stay distinct), with object values served whole. */
+const USE_FIELDS = ['variants', 'props', 'variant', 'size'];
+
+function dedupeName(base: string, used: Set<string>): string {
+  let final = base;
+  let k = 2;
+  while (used.has(final)) final = `${base}_${k++}`;
+  used.add(final);
+  return final;
+}
+
 function makePropName(ancestors: string[], leaf: string | undefined, field: string, used: Set<string>): string {
-  const suffix = FIELD_SUFFIX[field] ?? field;
+  const suffix = field; // prop suffix is the field's literal name (no aliasing)
   const leafSnake = snake(leaf);
   let base = leafSnake === suffix ? suffix : `${leafSnake}_${suffix}`;
   const anc = [...ancestors].reverse();
@@ -86,11 +113,7 @@ function makePropName(ancestors: string[], leaf: string | undefined, field: stri
     base = `${snake(anc[i])}_${base}`;
     i++;
   }
-  let final = base;
-  let k = 2;
-  while (used.has(final)) final = `${base}_${k++}`;
-  used.add(final);
-  return final;
+  return dedupeName(base, used);
 }
 
 /** Diff a group of structurally-identical occurrences: build a template with
@@ -101,9 +124,24 @@ function diffSlots(group: Node[]): { template: Node; slots: Slot[] } {
   const used = new Set<string>();
 
   function recur(occ: Node[], tmpl: Node, path: number[], namePath: string[]): void {
+    // Use-ref child: each identity field that varies becomes a whole-field prop
+    // named after the component. Use-refs have no name/children, so skip the
+    // normal SLOT_FIELDS pass for them.
+    if (typeof tmpl.use === 'string') {
+      for (const field of USE_FIELDS) {
+        if (tmpl[field] === undefined) continue;
+        const values = occ.map((n) => canon(n[field]));
+        if (!values.every((v) => v === values[0])) {
+          const propName = dedupeName(`${snake(tmpl.use)}_${field}`, used);
+          slots.push({ path: [...path], field, propName });
+          tmpl[field] = `{{${propName}}}`;
+        }
+      }
+      return;
+    }
     for (const field of SLOT_FIELDS) {
       if (tmpl[field] === undefined) continue;
-      const values = occ.map((n) => JSON.stringify(n[field]));
+      const values = occ.map((n) => canon(n[field]));
       if (!values.every((v) => v === values[0])) {
         const propName = makePropName(namePath, tmpl.name, field, used);
         slots.push({ path: [...path], field, propName });
@@ -240,12 +278,23 @@ export function finalizeVariants(
 }
 
 /** Extract repeated container subtrees into `components`, rewriting each usage
- *  to `{ use, props }`. Returns the rewritten tree + the component library. */
+ *  to `{ use, props }`. Returns the rewritten tree + the component library.
+ *  `defBodies` are existing component-def node trees (from code.ts): repeated
+ *  frames *inside* them are extracted too, but the bodies themselves are never
+ *  candidates (descend-only) and are rewritten in place. `reservedNames` seeds
+ *  the name pool so a generated name never collides with an existing def (which
+ *  would be silently dropped on merge). */
 export function synthesizeComponents(
   roots: Node[],
+  defBodies: Node[] = [],
+  reservedNames: Iterable<string> = [],
 ): { nodes: Node[]; components: Record<string, Component> } {
+  // Name-insensitive matching: structurally-identical siblings with distinct
+  // labels (e.g. day cells) group, while values that differ become props.
+  const sigOpts = { ignoreName: true };
   const counts = new Map<string, number>();
-  countContainers(roots, counts);
+  countContainers(roots, counts, sigOpts);
+  countContainers(defBodies, counts, sigOpts);
 
   // Gather top-level extraction occurrences per signature (stop descending once
   // a node is marked, so nested same-signature nodes aren't double-extracted).
@@ -253,7 +302,7 @@ export function synthesizeComponents(
   function collect(nodes: Node[]): void {
     for (const n of nodes) {
       if (n.children?.length) {
-        const s = signature(n);
+        const s = signature(n, sigOpts);
         if ((counts.get(s) ?? 0) >= 2 && descendantCount(n) >= MIN_DESCENDANTS) {
           (occ.get(s) ?? occ.set(s, []).get(s)!).push(n);
           continue; // extracted — don't descend into its internals
@@ -263,10 +312,13 @@ export function synthesizeComponents(
     }
   }
   collect(roots);
+  // Descend-only into def bodies: a def body is never extracted as a whole
+  // (that would replace a component with a use-ref to a dedupe component).
+  for (const d of defBodies) if (d.children) collect(d.children);
 
   const components: Record<string, Component> = {};
   const replacement = new Map<Node, Node>();
-  const usedNames = new Set<string>();
+  const usedNames = new Set<string>(reservedNames);
 
   for (const group of occ.values()) {
     if (group.length < 2) continue;
@@ -296,5 +348,9 @@ export function synthesizeComponents(
     });
   }
 
-  return { nodes: rewrite(roots), components };
+  const out = rewrite(roots);
+  // Def bodies are rewritten in place (callers hold the same node reference in
+  // their components map), and never replaced since they're descend-only above.
+  for (const d of defBodies) if (d.children) d.children = rewrite(d.children);
+  return { nodes: out, components };
 }

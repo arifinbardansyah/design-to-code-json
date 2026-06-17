@@ -8,6 +8,27 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-06-17
+
+### Changed
+- **Component dedupe now extracts repeated frames *inside* component definitions**,
+  not just the top-level node tree — so repeated subtrees that live within a
+  Figma component (e.g. a row of identical day cells) collapse into one reusable
+  component. `synthesizeComponents` now also processes the def bodies (`buildDocument`
+  passes them in, descend-only so a def body is never itself extracted), and
+  generated names are reserved against the existing library so a clash can't
+  silently drop a def.
+- **Structural matching is name-insensitive.** Two subtrees that match in
+  structure but differ only in their layer labels (e.g. `Senin`/`Selasa`/…) now
+  group into one component; the differing label becomes a prop. The variant-split
+  path keeps its name-sensitive matching.
+- **A nested component use-ref that varies contributes one prop per differing
+  field**, named `component_field` (`button_variants`, `button_props`,
+  `button_variant`), with object values served whole — so a repeated cell that
+  wraps an instance no longer bakes one instance's state into all of them.
+- **Prop names use each field's literal name** (e.g. `title_characters`), dropping
+  the previous `characters → text` / `variants → variant` aliasing.
+
 ## [0.8.1] — 2026-06-16
 
 ### Fixed
@@ -154,7 +175,8 @@ First public release — live on
 - Runs entirely offline (`networkAccess: none`); reads variables, so it works
   on any Figma plan with editor access.
 
-[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.9.0
 [0.8.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.8.1
 [0.8.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.8.0
 [0.7.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.7.1

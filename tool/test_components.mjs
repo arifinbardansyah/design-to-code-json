@@ -66,12 +66,12 @@ const listItem = (n, title, desc) => ({
   }];
   const { nodes, components } = C.synthesizeComponents(tree);
   const comp = components.ListItem;
-  eq('two text slots inferred', comp.props.sort(), ['secondary_text_text', 'title_text']);
-  truthy('template uses placeholder for title', JSON.stringify(comp.node).includes('{{title_text}}'));
+  eq('two text slots inferred', comp.props.sort(), ['secondary_text_characters', 'title_characters']);
+  truthy('template uses placeholder for title', JSON.stringify(comp.node).includes('{{title_characters}}'));
   truthy('color baked (identical)', JSON.stringify(comp.node).includes('#1D1B20'));
   const kids = nodes[0].children;
-  eq('usage 1 props', kids[0].props, { title_text: 'Apple', secondary_text_text: 'Red fruit' });
-  eq('usage 2 props', kids[1].props, { title_text: 'Banana', secondary_text_text: 'Yellow fruit' });
+  eq('usage 1 props', kids[0].props, { title_characters: 'Apple', secondary_text_characters: 'Red fruit' });
+  eq('usage 2 props', kids[1].props, { title_characters: 'Banana', secondary_text_characters: 'Yellow fruit' });
 }
 
 // --- single occurrence -> not extracted -----------------------------------
@@ -118,6 +118,96 @@ const listItem = (n, title, desc) => ({
   const props = components.Row?.props ?? [];
   eq('two unique icon slot names', new Set(props).size, 2);
   truthy('collision disambiguated by ancestor prefix', props.some((p) => /^(leading|trailing)_/.test(p)));
+}
+
+// --- name-insensitive dedupe + use-ref field props (the "Hari" day-cells) ---
+{
+  // A day cell: [ nameless use-ref into a multi-structure set, day-label TEXT ].
+  // active day / stacking vary per day; props key order is variant-dependent.
+  const cell = (idx, label, activeDay, stacking) => ({
+    name: `Hari ${idx}`, type: 'FRAME', layout: { mode: 'column', gap: 4 },
+    children: [
+      { use: 'daily claim token v4',
+        variants: { Claimed: 'no', 'active day': activeDay },
+        props: stacking
+          ? { show_icon_ui_fresh_coin: true, stacking: true, multiple_coin: false, sunburst: false }
+          : { show_icon_ui_fresh_coin: true, multiple_coin: false, stacking: false, sunburst: false },
+        variant: `...active day=${activeDay}` },
+      { name: label, type: 'TEXT', characters: label, textStyle: 'typeset/ui/xs/medium', color: '#364152' },
+    ],
+  });
+  const tree = [{ name: 'row', type: 'FRAME', layout: { mode: 'row' }, children: [
+    cell(1, 'Senin', 'yes', false), cell(2, 'Selasa', 'no', false), cell(3, 'Rabu', 'no', true),
+    cell(4, 'Kamis', 'no', false), cell(5, 'Jumat', 'no', false), cell(6, 'Sabtu', 'no', true),
+    cell(7, 'Minggu', 'no', false),
+  ] }];
+  const { nodes, components } = C.synthesizeComponents(tree);
+  const names = Object.keys(components);
+  eq('Hari: one component extracted', names.length, 1);
+  eq('Hari: component named Hari', names[0], 'Hari');
+  const comp = components.Hari;
+  eq('Hari: props per use-ref field + label', comp.props.slice().sort(), [
+    'daily_claim_token_v4_props', 'daily_claim_token_v4_variant',
+    'daily_claim_token_v4_variants', 'senin_characters',
+  ]);
+  const tmplUse = comp.node.children[0];
+  eq('Hari: variants placeholder', tmplUse.variants, '{{daily_claim_token_v4_variants}}');
+  eq('Hari: props placeholder', tmplUse.props, '{{daily_claim_token_v4_props}}');
+  eq('Hari: variant placeholder', tmplUse.variant, '{{daily_claim_token_v4_variant}}');
+  const kids = nodes[0].children;
+  eq('Hari: all seven usages rewritten', kids.map((k) => k.use), Array(7).fill('Hari'));
+  // No silent baking: Monday's token state differs from the rest, served whole.
+  eq('Hari: Monday variants', kids[0].props.daily_claim_token_v4_variants, { Claimed: 'no', 'active day': 'yes' });
+  eq('Hari: Tuesday variants', kids[1].props.daily_claim_token_v4_variants, { Claimed: 'no', 'active day': 'no' });
+  eq('Hari: Wednesday stacking', kids[2].props.daily_claim_token_v4_props.stacking, true);
+  eq('Hari: Monday label', kids[0].props.senin_characters, 'Senin');
+  eq('Hari: Wednesday label', kids[2].props.senin_characters, 'Rabu');
+}
+
+// --- def-body dedupe: repeats nested inside a component def are extracted ----
+{
+  // Production topology: the cells live inside a COMPONENT def body (passed via
+  // `defBodies`), not in the inline `nodes` roots. The body itself must never be
+  // extracted; its nested children get rewritten in place.
+  const cell = (idx, label) => ({
+    name: `Hari ${idx}`, type: 'FRAME', layout: { mode: 'column', gap: 4 },
+    children: [
+      { use: 'tok', variants: { day: label } },
+      { name: label, type: 'TEXT', characters: label, textStyle: 't', color: '#000' },
+    ],
+  });
+  const body = {
+    name: 'bottom side', type: 'COMPONENT', layout: { mode: 'column' },
+    children: [{ name: 'row', type: 'FRAME', layout: { mode: 'row' },
+      children: [cell(1, 'Senin'), cell(2, 'Selasa'), cell(3, 'Rabu')] }],
+  };
+  const components0 = { 'bottom side': { node: body } };
+  const { nodes, components } = C.synthesizeComponents([], [body], Object.keys(components0));
+  Object.assign(components0, components);
+  eq('defBody: roots untouched', nodes, []);
+  truthy('defBody: Hari extracted', components0.Hari);
+  truthy('defBody: original def kept', components0['bottom side']);
+  // body rewritten in place: cells -> use-refs
+  const row = components0['bottom side'].node.children[0];
+  eq('defBody: nested cells rewritten in place', row.children.map((k) => k.use), ['Hari', 'Hari', 'Hari']);
+  eq('defBody: per-cell prop captured', row.children[1].props.tok_variants, { day: 'Selasa' });
+}
+
+// --- canonical compare: key-order-only difference is not a slot -------------
+{
+  // Two identical cells whose use-ref `props` differ only in key order.
+  const c = (order) => ({
+    name: 'Cell', type: 'FRAME', layout: { mode: 'column', gap: 4 },
+    children: [
+      { use: 'tok', props: order === 1 ? { a: true, b: false } : { b: false, a: true } },
+      { name: 'L', type: 'TEXT', characters: 'L', textStyle: 't', color: '#000' },
+    ],
+  });
+  const { components } = C.synthesizeComponents([{ name: 'row', type: 'FRAME', layout: {}, children: [c(1), c(2)] }]);
+  const comp = Object.values(components)[0];
+  truthy('canon: one component extracted', comp);
+  eq('canon: key-order-only props baked, no slot', comp.props, undefined);
+  eq('canon: props baked whole in template', comp.node.children[0].props, { a: true, b: false });
 }
 
 // --- finalizeVariants -------------------------------------------------------

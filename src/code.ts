@@ -761,8 +761,15 @@ async function buildDocument(sel: readonly SceneNode[], lean = false): Promise<s
   // Component library (Figma component identity) and dedupe (repeated subtrees)
   // compose: the former captures real components inline during serialization
   // (into `ctx.components`), the latter then extracts any remaining repeated
-  // frames. Library defs win on a name clash.
-  const synth = synthesizeComponents(nodes as any[]);
+  // frames — both in the inline `nodes` tree and *inside* the library def
+  // bodies (e.g. repeated day cells within a component). Library defs win on a
+  // name clash; def bodies are rewritten in place via shared references.
+  const defBodies: any[] = [];
+  for (const def of Object.values(ctx.components)) {
+    if (def.node) defBodies.push(def.node);
+    if (def.variants) for (const v of Object.values(def.variants)) if (v.node) defBodies.push(v.node);
+  }
+  const synth = synthesizeComponents(nodes as any[], defBodies, Object.keys(ctx.components));
   nodes = synth.nodes;
   const merged = { ...synth.components, ...ctx.components };
   const components: Record<string, unknown> | undefined =
