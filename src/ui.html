@@ -25,9 +25,20 @@
       .primary { background: #0d99ff; color: #fff; }
       .ghost { background: #e5e5e5; color: #111; }
       #status { color: #2a8c4a; font-size: 11px; min-height: 14px; }
-      .opts { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 11px; }
-      .opts label { display: flex; gap: 4px; align-items: center; cursor: pointer; }
-      .opts select { font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid #ccc; }
+      .opts { display: flex; flex-direction: column; gap: 6px; font-size: 11px; }
+      .opts > .opts-label { font-weight: 600; }
+      .opts .mode { display: flex; gap: 6px; align-items: baseline; cursor: pointer; }
+      .opts .mode input { margin: 2px 0 0; }
+      .opts .mode .desc { color: #888; }
+      details.help { font-size: 11px; }
+      details.help summary { color: #0d99ff; cursor: pointer; user-select: none; }
+      details.help .ex { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+      details.help .ex p { margin: 0; color: #888; }
+      details.help pre {
+        margin: 2px 0 0; padding: 6px 8px; background: rgba(127,127,127,.12);
+        border-radius: 4px; font-family: ui-monospace, Menlo, monospace;
+        font-size: 10px; line-height: 1.4; overflow-x: auto; white-space: pre;
+      }
     </style>
   </head>
   <body>
@@ -37,9 +48,47 @@
       <button class="primary" id="copy">Copy JSON</button>
     </div>
     <div class="opts">
-      <label title="Split a component set into one definition per structurally-distinct variant (e.g. expanded=yes vs no). Value-only variants (colour/size/state) still share one definition."><input type="checkbox" id="variants" /> Split variants</label>
-      <label title="Emit a per-axis value table for component sets: the default variant as the base, plus how each variant value (Size, State, …) changes styling — read from the whole set in the design. Implies Split variants."><input type="checkbox" id="variantTable" /> Variant value table</label>
+      <span class="opts-label">Variants <span class="desc" style="font-weight:400">— how component sets are emitted</span></span>
+      <label class="mode">
+        <input type="radio" name="variantMode" value="off" checked />
+        <span>Off <span class="desc">— one shared definition per set</span></span>
+      </label>
+      <label class="mode">
+        <input type="radio" name="variantMode" value="split" />
+        <span>Split by structure <span class="desc">— separate def when a variant's tree differs</span></span>
+      </label>
+      <label class="mode">
+        <input type="radio" name="variantMode" value="table" />
+        <span>Value table <span class="desc">— per-axis style deltas, read from the set</span></span>
+      </label>
     </div>
+    <details class="help">
+      <summary>What do these do? · Examples</summary>
+      <div class="ex">
+        <p>The same <code>Button</code> set (axes <code>Size</code>, <code>State</code> value-only;
+        <code>Badge</code> structural) under each mode:</p>
+        <p><strong>Off</strong> — one def = first variant's tree; combos ride on the refs.
+        What other variants restyle isn't captured.</p>
+<pre>"components": { "Button": { "node": { … } } }   // first variant only
+// ref: { "use": "Button", "variants": { "Size": "Large", "Badge": "on" }, "size": { … } }</pre>
+        <p><strong>Split by structure</strong> — structural variants split; value axes still
+        share one def. Use-refs gain a <code>variant</code> pointer.</p>
+<pre>"components": { "Button": { "variants": {
+  "Badge=off": { "node": … },
+  "Badge=on":  { "node": … }   // + Badge child
+} } }
+// ref: { "use": "Button", "variant": "Badge=on", "variants": { … } }</pre>
+        <p><strong>Value table</strong> — base node + per-axis deltas (structural variants still
+        split out). Heaviest; best in the panel (not the 3 s Dev Mode budget).</p>
+<pre>"components": { "Button": {
+  "node": { … },                 // default variant = base
+  "variantStyles": {
+    "Size":  { "Large": { "size": { "width": 64, "height": 64 } } },
+    "State": { "Disabled": { "Background: fill": "#E0E0E0" } }
+  }
+} }</pre>
+      </div>
+    </details>
     <div class="hint">
       Select one or more frames — output updates automatically. Exports compact
       <code>nodes</code> (tree + layout/style/colour + bound-variable refs) plus
@@ -54,15 +103,15 @@
       const out = document.getElementById('out');
       const status = (m) => { document.getElementById('status').textContent = m; };
 
-      const getOptions = () => ({
-        variants: document.getElementById('variants').checked,
-        variantTable: document.getElementById('variantTable').checked,
-      });
+      const getOptions = () => {
+        const mode = document.querySelector('input[name="variantMode"]:checked').value;
+        return { variants: mode === 'split', variantTable: mode === 'table' };
+      };
       const sendOptions = () =>
         parent.postMessage({ pluginMessage: { type: 'options', options: getOptions() } }, '*');
 
-      for (const id of ['variants', 'variantTable']) {
-        document.getElementById(id).addEventListener('change', sendOptions);
+      for (const el of document.querySelectorAll('input[name="variantMode"]')) {
+        el.addEventListener('change', sendOptions);
       }
 
       onmessage = (e) => {

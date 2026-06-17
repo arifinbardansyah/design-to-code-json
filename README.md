@@ -84,35 +84,58 @@ The output is opinionated; the only control is variant-splitting:
 - **Variable modes** (fixed) — `colors` / `dimensions` emit **every** mode each
   variable defines (single mode collapses to a bare value; Light/Dark stays an
   object). No longer configurable.
-- **Split variants** (default off) — for a component **set**, emit one definition
-  per structurally-distinct variant that's used. Value-only variants
-  (colour/size/state) still collapse to a single def; only variants that change
-  the child tree (e.g. `expanded=yes` adding rows) split. A set with one
-  structure stays flat (`components[name] = { node }`); a set with several nests
-  (`components[name] = { variants: { "<combo>": { node } } }`) and each use-ref
-  gains a `variant` pointer. Only variants actually placed are processed.
-- **Variant value table** (default off; implies Split variants) — for a
-  component set, read the **whole set** from the design and emit the default
-  variant as the base `node` plus a per-axis `variantStyles` table of the
-  styling each variant value changes (vs. base), so per-variant values come from
-  the design rather than the consumer's code:
+- **Variants** (default `Off`) — one control with three modes for how a component
+  **set** is emitted. The three modes are nested: each does what the previous does
+  plus more.
+  - **Off** — a set collapses to a single def keyed by the set name, built from the
+    *first variant encountered* (`components[name] = { node }`). Every instance is a
+    `{ use, variants, … }` ref carrying its combo. Structural differences between
+    variants and the styling each variant value changes are **not** captured.
+  - **Split by structure** — inspects every variant that's used. Value-only variants
+    (colour/size/state) still collapse to one def; only variants that change the
+    child tree (e.g. `Badge=on` adding a child) split. A set with one structure
+    stays flat; a set with several nests (`components[name] = { variants: { "<combo>":
+    { node } } }`) and each use-ref gains a `variant` pointer.
+  - **Value table** — reads the **whole set** from the design and emits the default
+    variant as the base `node` plus a per-axis `variantStyles` table of the styling
+    each variant value changes (vs. base), so per-variant values come from the design
+    rather than the consumer's code. Structure-changing values still split into a
+    `variants` entry (a value table can only diff variants that share the base's tree
+    **shape** — same node types and child counts). Heaviest — best in the editor
+    panel (not the 3s Dev Mode budget).
+
+  The same `Button` set (axes `Size`, `State` value-only; `Badge` structural) across
+  the three modes:
 
   ```jsonc
-  "Icon button - standard": {
+  // Off — one def = first variant's tree; combos ride on the refs
+  "components": { "Button": { "node": { /* first variant */ } } }
+  // ref: { "use": "Button", "variants": { "Size": "Large", "Badge": "on" }, "size": { … } }
+
+  // Split by structure — structural variants split; value axes still share one def
+  "components": { "Button": { "variants": {
+    "Badge=off": { "node": { /* … */ } },
+    "Badge=on":  { "node": { /* … + Badge child */ } }
+  } } }
+  // ref: { "use": "Button", "variant": "Badge=on", "variants": { "Size": "Large", "Badge": "on" } }
+
+  // Value table — base node + per-axis deltas; structural variants still split out
+  "components": { "Button": {
     "node": { /* default variant, base values */ },
     "variantStyles": {
-      "Size":  { "Large": { "size": 64, "Content > Icon: size": 32 } },
-      "State": { "Disabled": { "Content > State-layer: fill": "#E0E0E0" } }
-    }
-  }
+      "Size":  { "Large": { "size": { "width": 64, "height": 64 } } },
+      "State": { "Disabled": { "Background: fill": "#E0E0E0", "Label: color": "#9E9E9E" } }
+    },
+    "variants": { "Badge=on": { "node": { /* … + Badge child */ } } }
+  } }
   ```
 
-  It serializes the base + one variant per axis-value (not the full combo
-  product). A variant is a table row when it shares the base's tree **shape**
-  (same node types and child counts, values aside); only a variant that changes
-  the shape — adds or removes a child — becomes a full `variants` entry instead.
-  So corner-radius / size / fill / opacity changes stay compact deltas. Heavier —
-  best in the editor panel (not the 3s Dev Mode budget).
+  **Which should I use?** For component **sets**, *Value table* gives codegen the most
+  to work with — it's the only mode that records what each variant value restyles. Reach
+  for *Split by structure* when you only need distinct structures (not value deltas), and
+  leave it *Off* when the selection has no component set. *Value table* and *Split by
+  structure* are not independent: *Value table* already splits structural variants, so it
+  fully contains *Split by structure*.
 
 ### Deduplicate components
 

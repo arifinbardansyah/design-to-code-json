@@ -8,6 +8,21 @@ release counter — each entry notes the matching Community release where useful
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-06-17
+
+### Changed
+- **The two variant toggles are now one "Variants" control with three modes** —
+  *Off* / *Split by structure* / *Value table* — replacing the independent
+  **Split variants** and **Variant value table** checkboxes. The old pair could
+  express a redundant "both on" state that was identical to *Value table* alone
+  (the value table already splits structural variants and supersedes
+  split-by-structure), so the single mutually-exclusive control makes the
+  `Off ⊂ Split ⊂ Value table` hierarchy explicit and removes the dead combination.
+  The panel now shows a one-line description per mode plus a collapsible
+  same-set example comparison, and the README documents all three side by side.
+  **Output is unchanged.** The Dev Mode codegen preference is now a single
+  `variantMode` select (replacing the separate `variants` / `variantTable` prefs).
+
 ## [0.9.0] — 2026-06-17
 
 ### Changed
@@ -175,7 +190,8 @@ First public release — live on
 - Runs entirely offline (`networkAccess: none`); reads variables, so it works
   on any Figma plan with editor access.
 
-[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/arifinbardansyah/design-to-code-json/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.10.0
 [0.9.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.9.0
 [0.8.1]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.8.1
 [0.8.0]: https://github.com/arifinbardansyah/design-to-code-json/releases/tag/v0.8.0

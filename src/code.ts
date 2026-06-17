@@ -811,8 +811,8 @@ async function run(forceCatalogRefresh = false): Promise<void> {
 
 /** Map the manifest-declared codegen preferences onto our Options. */
 function optionsFromCodegen(): Options {
-  const s = figma.codegen.preferences.customSettings;
-  return { variants: s.variants === 'on', variantTable: s.variantTable === 'on' };
+  const m = figma.codegen.preferences.customSettings.variantMode;
+  return { variants: m === 'split', variantTable: m === 'table' };
 }
 
 if (figma.mode === 'codegen') {

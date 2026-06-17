@@ -10,20 +10,12 @@
   "codegenPreferences": [
     {
       "itemType": "select",
-      "propertyName": "variants",
-      "label": "Split variants by structure",
+      "propertyName": "variantMode",
+      "label": "Variants",
       "options": [
         { "label": "Off", "value": "off", "isDefault": true },
-        { "label": "On", "value": "on" }
-      ]
-    },
-    {
-      "itemType": "select",
-      "propertyName": "variantTable",
-      "label": "Variant value table",
-      "options": [
-        { "label": "Off", "value": "off", "isDefault": true },
-        { "label": "On", "value": "on" }
+        { "label": "Split by structure", "value": "split" },
+        { "label": "Value table", "value": "table" }
       ]
     }
   ],

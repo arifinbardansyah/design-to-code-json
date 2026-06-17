@@ -41,18 +41,17 @@ the JSON. In Dev Mode, select a frame and pick "Design to Code JSON" as the code
 generator. Output updates as you change your selection.
 
 ——
-Code version 0.9.0 · changelog:
+Code version 0.10.0 · changelog:
 github.com/arifinbardansyah/design-to-code-json/blob/main/CHANGELOG.md
 (Figma's own version counter differs; the Dev Mode code section also prints the
-running build as "Design to Code JSON (v0.9.0)".)
+running build as "Design to Code JSON (v0.10.0)".)
 
-## Release notes (this version — code v0.9.0)
-Smarter component dedupe. Repeated frames *inside* a component (e.g. a row of
-identical day cells) now collapse into one reusable component, and matching is
-name-insensitive so cells that differ only by their label still group — the label
-becomes a prop. A repeated cell that wraps an instance captures that instance's
-varying state as props instead of baking one cell's state into all of them. Prop
-names now use each field's literal name (e.g. `title_characters`).
+## Release notes (this version — code v0.10.0)
+Clearer variant options. The two separate "Split variants" and "Variant value
+table" checkboxes are now one **Variants** control with three modes — *Off*,
+*Split by structure*, and *Value table* — each with a short description and a
+collapsible example, so it's obvious what each does and how they relate (Value
+table builds on Split by structure). Same JSON output as before.
 
 ## Tags (max 5)
 codegen, components, design to code, dev mode, llm
