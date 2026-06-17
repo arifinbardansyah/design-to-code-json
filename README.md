@@ -69,7 +69,8 @@ not `{ mode: 16 }`; multi-mode variables stay keyed by mode (e.g. Light/Dark).
 
 ### Behaviour (fixed) + the one option
 
-The output is opinionated; the only control is variant-splitting:
+The output is opinionated; the only control is the **Variants** mode (how
+component sets are emitted):
 
 - **Component library** (always on) — uses Figma's own component model: each
   container component is emitted once into `components` (with `{{prop}}`
@@ -202,8 +203,8 @@ to a file (e.g. a shared work file), use **Dev Mode** instead:
 1. Switch the file to **Dev Mode** (top toolbar toggle, or `&m=dev` in the URL).
 2. Select a frame and open the **Inspect** panel.
 3. In the code section, pick **Design to Code JSON** as the generator — the JSON
-   appears inline. Adjust **modes / dedupe / expand instances / drop ids** via
-   the generator's preferences (gear) menu.
+   appears inline. Set the **Variants** mode (Off / Split by structure / Value
+   table) via the generator's preferences (gear) menu.
 
 Same output as the editor panel; it runs as a Dev Mode *codegen* plugin
 (`capabilities: ["codegen"]`), which Figma allows for inspectors/viewers.
