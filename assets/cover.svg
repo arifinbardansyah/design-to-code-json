@@ -10,8 +10,8 @@
   <!-- left: copy -->
   <text x="140" y="300" font-family="Helvetica, Arial, sans-serif" font-size="34" font-weight="700" letter-spacing="6" fill="#FFFFFF" fill-opacity="0.75">FIGMA PLUGIN</text>
   <text x="136" y="416" font-family="Helvetica, Arial, sans-serif" font-size="86" font-weight="700" fill="#FFFFFF">Design to Code JSON</text>
-  <text x="140" y="520" font-family="Helvetica, Arial, sans-serif" font-size="44" font-weight="400" fill="#FFFFFF" fill-opacity="0.92">Any selection to codegen-ready JSON —</text>
-  <text x="140" y="580" font-family="Helvetica, Arial, sans-serif" font-size="44" font-weight="400" fill="#FFFFFF" fill-opacity="0.92">nodes, colours, text styles &amp; components.</text>
+  <text x="140" y="520" font-family="Helvetica, Arial, sans-serif" font-size="44" font-weight="400" fill="#FFFFFF" fill-opacity="0.92">Any selection &#8594; JSON for AI codegen —</text>
+  <text x="140" y="580" font-family="Helvetica, Arial, sans-serif" font-size="44" font-weight="400" fill="#FFFFFF" fill-opacity="0.92">real tokens, text styles &amp; components.</text>
 
   <!-- right: a faux JSON / token card -->
   <g transform="translate(1180,150)">

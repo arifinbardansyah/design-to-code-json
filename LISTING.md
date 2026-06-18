@@ -22,9 +22,9 @@ right. This plugin reads the real thing:
   definition, with text bound to component properties lifted to `{{props}}`.
   Each instance — even single-use ones — becomes a compact `{ use, props }`
   reference. Repeated frames that aren't components (e.g. list items) are
-  auto-deduped into the same library. The result maps almost 1:1 onto Jetpack
-  Compose / Flutter widgets — atomic, reusable components instead of one giant
-  flattened tree, so the AI builds good components instead of inventing them.
+  auto-deduped into the same library. The structure lines up with how you'd build
+  Jetpack Compose / Flutter widgets — atomic, reusable components instead of one
+  giant flattened tree, so the AI builds good components instead of inventing them.
 
 • **nodes** — a compact layer tree: auto-layout (direction, gap, padding,
   sizing), corner radius, effects, opacity, and text. Components appear as
