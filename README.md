@@ -2,12 +2,20 @@
 
 **▶ Install from Figma Community:** https://www.figma.com/community/plugin/1647834863384185949
 
-Exports the selected frame(s) as a single **component-aware** JSON document — a
-reusable `components` library (every Figma component as a `{ use, props }`
-definition, repeated frames deduped in too) plus a compact node tree and flat
-reference catalogs for the **colours** and **text styles** used, with
-bound-variable names preserved. No design-system assumptions; built for codegen
-(Jetpack Compose, Flutter, …) and LLM workflows. Runs in Design **and** Dev Mode.
+Exports the selected frame(s) as a single **component-aware** JSON document
+carrying the real **design tokens** (colours, text styles, spacing/radius) that a
+screenshot or a generic "design to code" exporter can't see — so an AI coding tool
+(Claude Code, Cursor, Copilot, ChatGPT, Gemini) generates UI that actually matches
+your design. A lightweight alternative when Figma's Dev Mode MCP server isn't an
+option.
+
+You get a reusable `components` library (every Figma component defined once, each
+instance a `{ use, props }` reference, repeated frames deduped in too) plus a
+compact node tree and flat
+reference catalogs for the **colours** and **text styles** used, with bound-variable
+names preserved. No design-system assumptions; built for codegen (Jetpack Compose,
+Flutter, …) and LLM workflows. Runs in both **Design mode** (with edit access) and
+**Dev Mode** (which also works on files you can only view), and entirely offline.
 
 ## Output
 
@@ -164,8 +172,8 @@ extracted outermost-first (internals stay inside the template).
 references: `name -> { mode: value }`, with aliases (semantic → primitive)
 resolved to their final literal. `textStyles` is the same idea for typography.
 A node's `fill` / `color` / `textStyle` is a key into these maps (or a raw hex
-when the property isn't bound to a variable). Switch **Modes** to `Light + Dark`
-to emit both theme values for each colour.
+when the property isn't bound to a variable). Multi-mode variables (e.g.
+Light/Dark) emit every mode.
 
 ## Build & verify
 

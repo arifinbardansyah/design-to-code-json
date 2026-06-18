@@ -6,13 +6,17 @@ Paste these into the Figma **Publish** modal. Assets are in `assets/`.
 Design to Code JSON
 
 ## Tagline (≤ ~60 chars)
-Component-aware JSON for codegen — Compose, Flutter, LLMs
+Component-aware JSON + real tokens for AI codegen
 
 ## Description
 Design to Code JSON turns a Figma selection into one clean, **component-aware**
-JSON document you can feed to codegen, a design-token pipeline, or an LLM.
+JSON document you can hand to any AI coding tool — Claude Code, Cursor, Copilot,
+ChatGPT, Gemini — so it generates UI that actually matches your design.
 
-It's built around your components:
+Why it beats a screenshot or a generic "design to code" exporter: those can't see
+your **components**, and they can't read your **design tokens** — so the AI
+guesses at colour, spacing, and type, and the code comes out almost-but-not-quite
+right. This plugin reads the real thing:
 
 • **components** — every Figma component is emitted **once** as a reusable
   definition, with text bound to component properties lifted to `{{props}}`.
@@ -20,20 +24,22 @@ It's built around your components:
   reference. Repeated frames that aren't components (e.g. list items) are
   auto-deduped into the same library. The result maps almost 1:1 onto Jetpack
   Compose / Flutter widgets — atomic, reusable components instead of one giant
-  flattened tree.
+  flattened tree, so the AI builds good components instead of inventing them.
 
 • **nodes** — a compact layer tree: auto-layout (direction, gap, padding,
   sizing), corner radius, effects, opacity, and text. Components appear as
   `{ use, props }`; icons stay compact atoms.
 
-• **colors / textStyles / dimensions** — flat catalogs of the variables and text
-  styles the selection uses, name → value per mode (Light/Dark). A node's
+• **colors / textStyles / dimensions** — flat catalogs of the real variables and
+  text styles the selection uses, name → value per mode (Light/Dark). A node's
   `fill` / `color` / `textStyle` is just a reference into them; raw values appear
-  only when a property isn't bound to a variable/style.
+  only when a property isn't bound to a variable/style. The AI gets your actual
+  token names, not eyeballed hex.
 
-Runs in **Design mode** and in **Dev Mode** (Inspect → Code section), so it works
-even on files you can only view. Entirely offline — nothing leaves your file.
-Reads variables on any plan in Design mode; Dev Mode availability follows your
+A lightweight alternative when Figma's Dev Mode MCP server isn't an option: it
+runs in **Design mode** and in **Dev Mode** (Inspect → Code section) — so it works
+even on files you can only view — reads variables on any plan in Design mode, and
+is entirely offline (nothing leaves your file). Dev Mode availability follows your
 Figma Dev Mode access.
 
 How to use: in Design mode, select one or more frames, open the plugin, and copy
@@ -47,12 +53,12 @@ github.com/arifinbardansyah/design-to-code-json/blob/main/CHANGELOG.md
 running build as "Design to Code JSON (v0.10.1)".)
 
 ## Release notes (this version — code v0.10.1)
-Dev Mode polish: the **Variants** option dropdown now spells out what each mode
-does (e.g. "Off · one shared def", "Value table · per-axis deltas"), so the
-choice is clearer right in the Inspect panel. Same JSON output as before.
+Listing refresh: clearer about what this is for — handing an AI coding tool the
+**components and real design tokens** a screenshot can't capture, so codegen comes
+out right. Same plugin, same JSON output as before; no behaviour change.
 
 ## Tags (max 5)
-codegen, components, design to code, dev mode, llm
+ai, codegen, components, design to code, dev mode
 
 ## Category
 Development
